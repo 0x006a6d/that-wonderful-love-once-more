@@ -49,6 +49,12 @@ const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
 @export var melee_1_out_ratio: float = 0.85
 ## melee_2 をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 81% の直後）。
 @export var melee_2_out_ratio: float = 0.90
+## melee_1 中に連鎖入力（再押下）を受け付ける窓の開始（再生割合）。
+## 打撃判定の開始（クリップの 27%）に合わせ、開始直後に届く押下
+## （最初の押下のバウンスやパッドの二重イベント）を連鎖として拾わない。
+@export var chain_window_start_ratio: float = 0.27
+## 連鎖受付窓の終了（再生割合）。既定は melee_1_out_ratio と同じ。
+@export var chain_window_end_ratio: float = 0.85
 
 signal combo_started()
 signal combo_finished()
@@ -137,7 +143,10 @@ func _anim_speed_scale(speed: float, blend: float) -> float:
 	return clampf(speed / natural, anim_speed_limits.x, anim_speed_limits.y)
 
 
-## 攻撃入力。locomotion なら melee_1 開始、melee_1 中なら次段をバッファ。
+## 攻撃入力（押下イベント 1 回につき 1 コール。押しっぱなしでは再コールされない）。
+## - locomotion: melee_1 を開始する。この押下はここで消費され、連鎖には使われない
+## - melee_1 中: 連鎖受付窓（chain_window_*_ratio）内の「新たな押下」のみ melee_2 を予約
+## - melee_2 中・窓外: 無視（1 押し 1 発。2 段で打ち止め）
 func attack() -> void:
 	if _state_machine == null:
 		return
@@ -146,8 +155,20 @@ func attack() -> void:
 		_buffered = false
 		_state_machine.travel("melee_1")
 		combo_started.emit()
-	elif _state == "melee_1":
+	elif _state == "melee_1" and _in_chain_window():
 		_buffered = true
+
+
+## melee_1 の連鎖受付窓の中か。travel 直後（まだ locomotion 側）や
+## 窓の前後に届いた押下は連鎖として扱わない。
+func _in_chain_window() -> bool:
+	if str(_state_machine.get_current_node()) != "melee_1":
+		return false
+	var length := _state_machine.get_current_length()
+	if length <= 0.0:
+		return false
+	var ratio := _state_machine.get_current_play_position() / length
+	return ratio >= chain_window_start_ratio and ratio <= chain_window_end_ratio
 
 
 func is_attacking() -> bool:
