@@ -51,29 +51,32 @@ const CLIPS: Array = [
 	["melee_3", "res://assets/motions/mixamo_hook_4.fbx", "mixamo_com",
 		0.70, 1.15, 1.0, 0.99, 1.10, 26.0, 10.0],
 
-	# --- キックコンボ: 膝 → ミドル/ハイ → サイドキック (diag_kick_feet.gd の実測) ---
+	# --- キックコンボ: 膝 → ミドル → MMA キック (diag_kick_feet.gd の実測) ---
 	# kick_1: 右ひざ (Illegal Knee)。単発 (ひざ高さ peak 1.161m @0.80、1.3s で復帰)。
-	# 初段のテンポを出すため 1.4x。射程が短いので lunge を深めにする (player.gd 側 3.0)。
+	# 初段のテンポを出すため 1.4x。射程が短いので lunge を深めにする (player.gd 側)。
 	["kick_1", "res://assets/motions/mixamo_knee.fbx", "mixamo_com",
 		0.35, 1.20, 1.4, 0.68, 0.98, 14.0, 1.2],
-	# kick_2: 左ハイキック (Kicking2)。単発 (LF peak 0.838-0.880m @1.20-1.25、
-	# 高さ 1.04-1.06 = 胸〜頭。チャンバー 0.7-1.0 → 伸展 1.1-1.25 → 引き 1.3〜)。
-	# 右膝 (kick_1) と左右交互になり、コンボの見た目が交差する。
-	["kick_2", "res://assets/motions/mixamo_kick_high_left.fbx", "mixamo_com",
-		0.60, 1.50, 1.3, 1.05, 1.32, 20.0, 2.0],
-	# kick_3: 右回し蹴り (Roundhouse Kick、フィニッシュ)。単発 (planar peak 0.803m
-	# @1.10、高さ最大 1.325m @0.90 = 頭。引き足 0.5-0.75 → 弧 0.8-1.1)。
-	# 「伸ばした所」(1.15) で終わる。吹き飛ばし。disable は out_ratio 0.95 より
-	# 手前 (89%) に置き、ステート離脱前に必ず OFF が発火するようにする。
-	["kick_3", "res://assets/motions/mixamo_kick_roundhouse.fbx", "mixamo_com",
-		0.50, 1.15, 1.15, 0.85, 1.08, 30.0, 12.0],
+	# kick_2: 右ミドル/ハイ (Kicking)。単発 (RF peak 0.868m @0.65)。
+	# enable はピーク直前 (0.62)。1.15x。
+	["kick_2", "res://assets/motions/mixamo_kick_finish.fbx", "mixamo_com",
+		0.30, 0.95, 1.15, 0.62, 0.85, 20.0, 2.0],
+	# kick_3: MMA キック (Mma Kick、フィニッシュ)。単発。足を頭の高さ (RF.y 1.30 @0.75)
+	# まで上げてから 0.85s で最大リーチ (RF.xz 0.872m) に伸びる、高く伸びる大技。
+	# 区間はチャンバー 0.45 → 高く上げ 0.75 → 伸展 0.85 → 引き。「伸ばした所」で終わる。
+	# フィニッシュらしく等速寄り (1.1x)。enable はリーチのピーク (0.85) 直前の 0.82。
+	# 吹き飛ばし。
+	["kick_3", "res://assets/motions/mixamo_kick_mma.fbx", "mixamo_com",
+		0.45, 1.00, 1.1, 0.82, 0.93, 30.0, 12.0],
 	# ユーザー判断でコンボから外れた素材 (実測値は残す。未使用):
 	#   Kick Soccerball 右前蹴り RF 0.590m @0.25-0.30:
 	#   ["kick_soccer", "res://assets/motions/mixamo_kick_soccer.fbx", "mixamo_com",
 	#       0.00, 0.45, 1.0, 0.20, 0.36, 14.0, 1.5],
-	#   Kicking 右ミドル/ハイ RF 0.868m @0.65:
-	#   [".", "res://assets/motions/mixamo_kick_finish.fbx", "mixamo_com",
-	#       0.30, 0.95, 1.15, 0.58, 0.85, 20.0, 2.0],
+	#   Kicking2 左ハイ LF 0.880m @1.20-1.25:
+	#   [".", "res://assets/motions/mixamo_kick_high_left.fbx", "mixamo_com",
+	#       0.60, 1.50, 1.3, 1.05, 1.32, 20.0, 2.0],
+	#   Roundhouse 右回し蹴り planar 0.803m @1.10、高さ 1.325m @0.90:
+	#   [".", "res://assets/motions/mixamo_kick_roundhouse.fbx", "mixamo_com",
+	#       0.50, 1.15, 1.15, 0.85, 1.08, 30.0, 12.0],
 	#   Side Kick 右サイド RF 0.765m @0.70:
 	#   [".", "res://assets/motions/mixamo_kick_side.fbx", "mixamo_com",
 	#       0.30, 0.95, 1.15, 0.62, 0.88, 30.0, 12.0],
