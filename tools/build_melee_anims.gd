@@ -33,6 +33,18 @@ const CLIPS: Array = [
 ]
 
 
+## Hips の位置トラックを探し、全キーの X/Z を 0 に固定する（Y は保持）。
+func _strip_hips_xz(anim: Animation) -> void:
+	for t in range(anim.get_track_count()):
+		if anim.track_get_type(t) != Animation.TYPE_POSITION_3D:
+			continue
+		if not str(anim.track_get_path(t)).ends_with(":Hips"):
+			continue
+		for k in range(anim.track_get_key_count(t)):
+			var v: Vector3 = anim.track_get_key_value(t, k)
+			anim.track_set_key_value(t, k, Vector3(0.0, v.y, 0.0))
+
+
 ## 全トラックのキー時刻と length を factor 倍する（factor<1 で再生が速くなる）。
 ## 後ろのキーから set することで、同一トラック内の時刻衝突を避ける。
 func _scale_time(anim: Animation, factor: float) -> void:
@@ -92,6 +104,10 @@ func _build_one(entry: Array) -> bool:
 
 	# 時間スケール: 全トラックのキー時刻と length を 1/SPEED 倍する（method key も後で合わせる）。
 	_scale_time(anim, 1.0 / SPEED)
+
+	# ルートモーション除去: Hips 位置トラックのキー XZ を 0 に固定する（Y の上下動は保持）。
+	# 残っていると再生中に体が滑って見え、攻撃終了時に待機ポーズ位置へスナップする。
+	_strip_hips_xz(anim)
 
 	# Call Method Track を追加。root_node は Model(VRM) なので、Player はその親 ".."。
 	var track := anim.add_track(Animation.TYPE_METHOD)
