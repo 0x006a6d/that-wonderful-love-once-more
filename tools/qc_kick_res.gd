@@ -15,8 +15,8 @@ const FPS := 60.0
 # kick_2 (ひざ) の打撃はほぼ垂直で、足先 planar は引き足 (後方) を誤検出する。
 # ひざ高さ (RightLowerLeg の Y) の横断で数える。
 const TARGETS: Array = [
-	["kick_1", "res://actors/player/anim/kick_1.res", "R", "foot_planar", 0.40],
-	["kick_2", "res://actors/player/anim/kick_2.res", "R", "knee_y", 0.90],
+	["kick_1", "res://actors/player/anim/kick_1.res", "R", "knee_y", 0.90],
+	["kick_2", "res://actors/player/anim/kick_2.res", "R", "foot_planar", 0.45],
 	["kick_3", "res://actors/player/anim/kick_3.res", "R", "foot_planar", 0.45],
 ]
 

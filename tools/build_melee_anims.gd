@@ -48,20 +48,24 @@ const CLIPS: Array = [
 	["melee_3", "res://assets/motions/mixamo_hook_4.fbx", "mixamo_com",
 		0.70, 1.08, 1.15, 0.96, 1.05, 26.0, 10.0],
 
-	# --- キックコンボ (diag_kick_feet.gd の両足・両膝実測) ---
-	# kick_1: 右前蹴り (Kick Soccerball)。クリップ全長 0.5s がそのまま単発
-	# (RF peak 0.590m @0.25-0.30、開始・終了が同一スタンス、左足は接地のまま)。
-	# 元から速いので等速。enable はピーク直前。
-	["kick_1", "res://assets/motions/mixamo_kick_soccer.fbx", "mixamo_com",
-		0.00, 0.45, 1.0, 0.20, 0.36, 14.0, 1.5],
-	# kick_2: 右ひざ (Illegal Knee)。単発 (ひざ高さ peak 1.161m @0.80、1.3s で復帰、
-	# 以降はスタンス揺れ)。射程が短いので lunge を深めにする (player.gd 側 3.0)。
-	["kick_2", "res://assets/motions/mixamo_knee.fbx", "mixamo_com",
-		0.35, 1.20, 1.3, 0.68, 0.98, 18.0, 1.2],
-	# kick_3: 右ハイキック (Kicking、フィニッシュ)。単発 (RF peak 0.868m @0.65、
-	# 高さ 0.88-0.94 = 胸〜頭)。吹き飛ばし。
-	["kick_3", "res://assets/motions/mixamo_kick_finish.fbx", "mixamo_com",
-		0.30, 0.95, 1.15, 0.58, 0.85, 30.0, 12.0],
+	# --- キックコンボ: 膝 → ミドル/ハイ → サイドキック (diag_kick_feet.gd の実測) ---
+	# kick_1: 右ひざ (Illegal Knee)。単発 (ひざ高さ peak 1.161m @0.80、1.3s で復帰)。
+	# 初段のテンポを出すため 1.4x。射程が短いので lunge を深めにする (player.gd 側 3.0)。
+	["kick_1", "res://assets/motions/mixamo_knee.fbx", "mixamo_com",
+		0.35, 1.20, 1.4, 0.68, 0.98, 14.0, 1.2],
+	# kick_2: 右ミドル/ハイキック (Kicking)。単発 (RF peak 0.868m @0.65、
+	# 高さ 0.88-0.94 = 胸〜頭)。
+	["kick_2", "res://assets/motions/mixamo_kick_finish.fbx", "mixamo_com",
+		0.30, 0.95, 1.15, 0.58, 0.85, 20.0, 2.0],
+	# kick_3: 右サイドキック (Side Kick、フィニッシュ)。単発 (RF peak 0.765m @0.70、
+	# 高さ 1.12-1.20 = 胸〜頭。チャンバー 0.25-0.45 → 伸展 0.70-0.90 → 引き 0.95〜)。
+	# 「伸ばした所」で終わる。吹き飛ばし。
+	["kick_3", "res://assets/motions/mixamo_kick_side.fbx", "mixamo_com",
+		0.30, 0.95, 1.15, 0.62, 0.88, 30.0, 12.0],
+	# Kick Soccerball (右前蹴り、RF peak 0.590m @0.25-0.30) はユーザー判断で
+	# コンボから外した。素材と実測値は残すが未使用:
+	#   ["kick_soccer", "res://assets/motions/mixamo_kick_soccer.fbx", "mixamo_com",
+	#       0.00, 0.45, 1.0, 0.20, 0.36, 14.0, 1.5],
 ]
 
 
