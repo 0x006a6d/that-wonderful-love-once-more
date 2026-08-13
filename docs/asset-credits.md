@@ -29,6 +29,42 @@
   - 回避・移動 (4): `mixamo_dodge_backward` (Standing Dodge Backward) / `mixamo_dive_roll` (Running Dive Roll) / `mixamo_backslide` (Sprint To Backslide) / `mixamo_fall_land_idle` (Fall B Land To Standing Idle)
   - 銃 (1): `mixamo_rifle_fire` (Firing Rifle)
   - ダウン (6): `mixamo_death_dying` (Dying) / `mixamo_death_front_01` (Death From The Front) / `mixamo_death_back_01` (Death From Back Headshot。元名がプロジェクト制約に触れるため中立名で配置) / `mixamo_death_backward_01` / `mixamo_death_forward_01` / `mixamo_death_left_01` (Standing Death Backward/Forward/Left 01)
+### ファイル名 ↔ Mixamo 検索名 対応表
+
+Mixamo で各モーションを検索・ダウンロードする際の検索名（Mixamo 上のアニメーション名）と、`assets/motions/` へ配置する際のファイル名の対応。ダウンロードは全て **FBX for Unity / Without Skin**。Hook / Illegal Elbow Punch は Mixamo 上で同名の複数バリエーションがあり、ダウンロード時に `(1)` `(2)` 等の連番が付く。ここでは連番の若い順にファイル名を割り当てている。
+
+| Mixamo 検索名 | 配置ファイル名 |
+| --- | --- |
+| Cross Punch | `mixamo_cross_punch.fbx` |
+| Combo Punch | `mixamo_combo_punch.fbx` |
+| Punch Combo | `mixamo_punch_combo.fbx` |
+| Hook | `mixamo_hook_1.fbx` |
+| Hook (バリエーション 2) | `mixamo_hook_2.fbx` |
+| Hook (バリエーション 3) | `mixamo_hook_3.fbx` |
+| Hook (バリエーション 4) | `mixamo_hook_4.fbx` |
+| Illegal Elbow Punch | `mixamo_elbow_1.fbx` |
+| Illegal Elbow Punch (バリエーション 2) | `mixamo_elbow_2.fbx` |
+| Illegal Elbow Punch (バリエーション 3) | `mixamo_elbow_3.fbx` |
+| Boxing | `mixamo_boxing_idle.fbx` |
+| Chapa-Giratoria | `mixamo_kick_chapa.fbx` |
+| Martelo 2 | `mixamo_kick_martelo.fbx` |
+| Standing Melee Kick | `mixamo_kick_standing.fbx` |
+| Hit Reaction | `mixamo_hit_react_1.fbx` |
+| Standing React Large From Front | `mixamo_hit_react_large_front.fbx` |
+| Standing React Large From Right | `mixamo_hit_react_large_right.fbx` |
+| Standing React Small From Right | `mixamo_hit_react_small.fbx` |
+| Standing Dodge Backward | `mixamo_dodge_backward.fbx` |
+| Running Dive Roll | `mixamo_dive_roll.fbx` |
+| Sprint To Backslide | `mixamo_backslide.fbx` |
+| Fall B Land To Standing Idle | `mixamo_fall_land_idle.fbx` |
+| Firing Rifle | `mixamo_rifle_fire.fbx` |
+| Dying | `mixamo_death_dying.fbx` |
+| Death From The Front | `mixamo_death_front_01.fbx` |
+| Death From Back Headshot | `mixamo_death_back_01.fbx` |
+| Standing Death Backward 01 | `mixamo_death_backward_01.fbx` |
+| Standing Death Forward 01 | `mixamo_death_forward_01.fbx` |
+| Standing Death Left 01 | `mixamo_death_left_01.fbx` |
+
 - 出典: Mixamo (https://www.mixamo.com、Adobe 提供)
 - キャラクター: Ch12_nonPBR。ダウンロードは Without Skin 相当 (メッシュ非同梱、スケルトン + アニメのみ。中身を確認済み。`Ch12_nonPBR` はファイル名の名残でメッシュは入っていない)。
 - ライセンス: Adobe General Terms of Use に基づく。Mixamo のコンテンツは自分の制作物への組み込み利用が可 (ゲーム・映像等)。一方でモーション/キャラを Mixamo 由来のスタンドアロンなアセットとして単体再配布 (素材ファイルそのものの配布・転売) することは不可。
