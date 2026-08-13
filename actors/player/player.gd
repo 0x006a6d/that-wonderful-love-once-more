@@ -14,6 +14,10 @@ extends CharacterBody3D
 @export var decel: float = 14.0
 ## 攻撃開始時のブレーキ（m/s²）。移動慣性を踏み込み一歩ぶんだけ残して殺す。
 @export var attack_brake: float = 30.0
+## コンボ各段の踏み込み初速（m/s、x=ジャブ y=ストレート z=フック）。
+## 段が進むほど深く踏み込み、ノックバックした相手にフィニッシュが届くようにする。
+## attack_brake で減衰するため「一歩踏み込んで止まる」挙動になる。
+@export var lunge_speeds: Vector3 = Vector3(1.5, 2.5, 3.5)
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 
@@ -46,6 +50,19 @@ func _ready() -> void:
 
 	if _hitbox != null:
 		_hitbox.hit_landed.connect(_on_hit_landed)
+	if _melee != null and _melee.has_signal("stage_started"):
+		_melee.connect("stage_started", _on_stage_started)
+
+
+## コンボの段開始で前方へ踏み込む（attack_brake が減衰を担う）。
+func _on_stage_started(stage: int) -> void:
+	if _model == null:
+		return
+	var yaw := _model.global_rotation.y
+	var forward := Vector3(sin(yaw), 0.0, cos(yaw))
+	var speed_for_stage: float = [lunge_speeds.x, lunge_speeds.y, lunge_speeds.z][stage - 1]
+	velocity.x = forward.x * speed_for_stage
+	velocity.z = forward.z * speed_for_stage
 
 
 func _physics_process(delta: float) -> void:
