@@ -53,19 +53,27 @@ const CLIPS: Array = [
 	# 初段のテンポを出すため 1.4x。射程が短いので lunge を深めにする (player.gd 側 3.0)。
 	["kick_1", "res://assets/motions/mixamo_knee.fbx", "mixamo_com",
 		0.35, 1.20, 1.4, 0.68, 0.98, 14.0, 1.2],
-	# kick_2: 右ミドル/ハイキック (Kicking)。単発 (RF peak 0.868m @0.65、
-	# 高さ 0.88-0.94 = 胸〜頭)。
-	["kick_2", "res://assets/motions/mixamo_kick_finish.fbx", "mixamo_com",
-		0.30, 0.95, 1.15, 0.58, 0.85, 20.0, 2.0],
-	# kick_3: 右サイドキック (Side Kick、フィニッシュ)。単発 (RF peak 0.765m @0.70、
-	# 高さ 1.12-1.20 = 胸〜頭。チャンバー 0.25-0.45 → 伸展 0.70-0.90 → 引き 0.95〜)。
-	# 「伸ばした所」で終わる。吹き飛ばし。
-	["kick_3", "res://assets/motions/mixamo_kick_side.fbx", "mixamo_com",
-		0.30, 0.95, 1.15, 0.62, 0.88, 30.0, 12.0],
-	# Kick Soccerball (右前蹴り、RF peak 0.590m @0.25-0.30) はユーザー判断で
-	# コンボから外した。素材と実測値は残すが未使用:
+	# kick_2: 左ハイキック (Kicking2)。単発 (LF peak 0.838-0.880m @1.20-1.25、
+	# 高さ 1.04-1.06 = 胸〜頭。チャンバー 0.7-1.0 → 伸展 1.1-1.25 → 引き 1.3〜)。
+	# 右膝 (kick_1) と左右交互になり、コンボの見た目が交差する。
+	["kick_2", "res://assets/motions/mixamo_kick_high_left.fbx", "mixamo_com",
+		0.60, 1.50, 1.3, 1.05, 1.32, 20.0, 2.0],
+	# kick_3: 右回し蹴り (Roundhouse Kick、フィニッシュ)。単発 (planar peak 0.803m
+	# @1.10、高さ最大 1.325m @0.90 = 頭。引き足 0.5-0.75 → 弧 0.8-1.1)。
+	# 「伸ばした所」(1.15) で終わる。吹き飛ばし。disable は out_ratio 0.95 より
+	# 手前 (89%) に置き、ステート離脱前に必ず OFF が発火するようにする。
+	["kick_3", "res://assets/motions/mixamo_kick_roundhouse.fbx", "mixamo_com",
+		0.50, 1.15, 1.15, 0.85, 1.08, 30.0, 12.0],
+	# ユーザー判断でコンボから外れた素材 (実測値は残す。未使用):
+	#   Kick Soccerball 右前蹴り RF 0.590m @0.25-0.30:
 	#   ["kick_soccer", "res://assets/motions/mixamo_kick_soccer.fbx", "mixamo_com",
 	#       0.00, 0.45, 1.0, 0.20, 0.36, 14.0, 1.5],
+	#   Kicking 右ミドル/ハイ RF 0.868m @0.65:
+	#   [".", "res://assets/motions/mixamo_kick_finish.fbx", "mixamo_com",
+	#       0.30, 0.95, 1.15, 0.58, 0.85, 20.0, 2.0],
+	#   Side Kick 右サイド RF 0.765m @0.70:
+	#   [".", "res://assets/motions/mixamo_kick_side.fbx", "mixamo_com",
+	#       0.30, 0.95, 1.15, 0.62, 0.88, 30.0, 12.0],
 ]
 
 

@@ -18,6 +18,8 @@ const SOURCES: Array = [
 	["kick_finish (Kicking)", "res://assets/motions/mixamo_kick_finish.fbx"],
 	["knee_jab (Knee Jab)", "res://assets/motions/mixamo_knee_jab.fbx"],
 	["kick_side (Side Kick)", "res://assets/motions/mixamo_kick_side.fbx"],
+	["kick_high_left (Kicking2)", "res://assets/motions/mixamo_kick_high_left.fbx"],
+	["kick_roundhouse (Roundhouse Kick)", "res://assets/motions/mixamo_kick_roundhouse.fbx"],
 ]
 
 

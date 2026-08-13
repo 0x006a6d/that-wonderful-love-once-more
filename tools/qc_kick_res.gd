@@ -16,7 +16,7 @@ const FPS := 60.0
 # ひざ高さ (RightLowerLeg の Y) の横断で数える。
 const TARGETS: Array = [
 	["kick_1", "res://actors/player/anim/kick_1.res", "R", "knee_y", 0.90],
-	["kick_2", "res://actors/player/anim/kick_2.res", "R", "foot_planar", 0.45],
+	["kick_2", "res://actors/player/anim/kick_2.res", "L", "foot_planar", 0.45],
 	["kick_3", "res://actors/player/anim/kick_3.res", "R", "foot_planar", 0.45],
 ]
 

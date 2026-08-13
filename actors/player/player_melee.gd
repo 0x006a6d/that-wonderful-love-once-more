@@ -3,7 +3,7 @@ extends Node
 ## プレイヤーのアニメーション制御。
 ## locomotion(idle/walk/run ブレンド) から2系統の独立3段コンボ:
 ##   パンチ: melee_1(左ジャブ) → melee_2(右ストレート) → melee_3(左フック)
-##   キック: kick_1(右ひざ) → kick_2(右ミドル/ハイ) → kick_3(右サイドキック)
+##   キック: kick_1(右ひざ) → kick_2(左ハイキック) → kick_3(右回し蹴り)
 ##
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
 ## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
@@ -60,9 +60,9 @@ const KICK_3_RES: String = "res://actors/player/anim/kick_3.res"
 @export var melee_3_out_ratio: float = 0.95
 ## kick_1（右ひざ）の抜け割合（判定窓の終了 74% の直後）。
 @export var kick_1_out_ratio: float = 0.85
-## kick_2（右ミドル/ハイキック）の抜け割合（判定窓の終了 85% の直後）。
+## kick_2（左ハイキック）の抜け割合（判定窓の終了 80% の直後）。
 @export var kick_2_out_ratio: float = 0.90
-## kick_3（右サイドキック、フィニッシュ）の抜け割合（判定窓の終了 89% の直後）。
+## kick_3（右回し蹴り、フィニッシュ）の抜け割合（判定窓の終了 89% の直後）。
 @export var kick_3_out_ratio: float = 0.95
 ## 押下のデバウンス（物理フレーム数）。この間隔未満で届いた連続押下は
 ## 物理バウンス・パッドの二重イベントとして無視する（4f ≈ 66ms @60Hz）。

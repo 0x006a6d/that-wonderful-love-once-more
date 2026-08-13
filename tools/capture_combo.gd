@@ -76,6 +76,11 @@ func _ready() -> void:
 			_key = KEY_K
 			_press_times = [1.0, 1.35, 1.70]
 			_end_time = 4.5
+		"k3c":
+			# 膝→左ハイ→回し蹴り構成のキック3連 (0.35s 間隔)。
+			_key = KEY_K
+			_press_times = [1.0, 1.35, 1.70]
+			_end_time = 4.5
 	for i in range(_press_times.size()):
 		_pressed.append(false)
 	_csv.append("frame,time,state,node,pos,hitbox_monitoring")
@@ -123,6 +128,8 @@ func _build_stage() -> void:
 	_player.position = Vector3(0, 0.1, 0)
 	_melee = _player.get_node("PlayerMelee")
 	_hitbox = _player.get_node("Model/MeleeHitbox") as Area3D
+	# キャプチャ中は物理キーボード/パッドの実入力を無効化する (混入防止)。
+	_player.set_process_unhandled_input(false)
 
 	# ダミー (正面 1.1m)
 	var dummy := (load(DUMMY) as PackedScene).instantiate() as Node3D
@@ -139,16 +146,14 @@ func _build_stage() -> void:
 
 
 func _press() -> void:
-	var ev := InputEventKey.new()
-	ev.physical_keycode = _key
-	ev.pressed = true
-	Input.parse_input_event(ev)
-	var rel := InputEventKey.new()
-	rel.physical_keycode = _key
-	rel.pressed = false
-	# release は少し後に送る (押下エッジのみ意味を持つ)
-	get_tree().create_timer(0.03, true, false, true).timeout.connect(
-		func() -> void: Input.parse_input_event(rel))
+	# 実イベント (parse_input_event) はキャプチャウィンドウがフォーカスを持つため
+	# 物理キーボード/パッドの実入力と混ざる (ユーザーが作業中だと押していない
+	# コンボが混入する事故が実際に起きた)。入力レイヤは test_attack_semantics で
+	# 検証済みなので、映像QCでは PlayerMelee を直接駆動して純度を保つ。
+	if _key == KEY_K:
+		_melee.call("kick")
+	else:
+		_melee.call("attack")
 
 
 func _physics_process(_delta: float) -> void:
