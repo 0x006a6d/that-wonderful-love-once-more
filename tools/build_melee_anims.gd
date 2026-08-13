@@ -13,14 +13,14 @@ extends SceneTree
 ## (旧 melee_1 に視覚上3発入っていた原因)。単発クリップのみを使うこと。
 ## 使うクリップは必ず両手計測で「視覚上1発」を確認してから載せる。
 ##
-## 区間切り出しの根拠 (両手計測、Hips XZ 除去後):
+## 区間は「ガード → 伸展 → ガード復帰」だけに絞る (予備動作の長い区間を含めない)。
+## 根拠 (両手計測、Hips XZ 除去後):
 ##   Lead Jab (mixamo_jab_left): 左 1 発のみ (L peak 0.497m @0.40s、右は全編ガード)。
-##     引き 0.15-0.25s → 伸展 0.30-0.45s → 0.60s でガード復帰 → trim [0.15, 0.60]s
-##   Cross_Punch: 右 1 発のみ (R peak 0.626m @1.10s、L は全編ガード帯 0.35-0.40)
-##     → trim [0.55, 1.45]s。打撃 0.92-1.25s
-##   hook_4: 右フック 1 発 (R が x -0.31→+0.11 へ横断、xz peak 0.386m @0.75s。
-##     フック中の L は前方 0.35 以下)。左スイングが 0.95s から始まるため
-##     trim [0.45, 0.90]s で単発に切れる (diag_hook_lateral.gd)
+##     拳が動き出す直前 0.22s 〜 ガード復帰 0.62s → trim [0.22, 0.62]s、1.4x
+##   Cross_Punch: 右 1 発のみ (R peak 0.629m @1.12s)。長い引き絞り (0.43-0.90s) は
+##     ほぼ除外し、打撃直前 0.80s 〜 戻り 1.42s → trim [0.80, 1.42]s。
+##     伸展保持 (≥0.55m が 0.17s) を 0.1s に収めるため 1.7x
+##   hook_4: 右フック 1 発 (xz peak 0.386m @0.75s)。trim [0.50, 0.92]s、1.15x
 ##
 ## 使い方: godot --path . --headless --script tools/build_melee_anims.gd
 
@@ -30,54 +30,57 @@ const OUT_DIR: String = "res://actors/player/anim"
 # trim_* / enable_t / disable_t は元クリップ（等速）基準の秒。
 const CLIPS: Array = [
 	# 左ジャブ。ジャブらしく速め (1.4x)。
+	# enable はピーク (src 0.40s) 直前に置く: ヒットストップの凍結が「伸び切った打撃
+	# ポーズ」で起きるようにするため。早すぎると伸びかけで凍結→再開が2発目に見える
+	# (state_a3.csv の tick 69-72 で実証)。
 	["melee_1", "res://assets/motions/mixamo_jab_left.fbx", "mixamo_com",
-		0.15, 0.60, 1.4, 0.28, 0.48, 10.0, 3.0],
+		0.22, 0.62, 1.4, 0.36, 0.48, 10.0, 3.0],
+	# 右ストレート。伸展保持を 0.1s に収める (1.7x)。enable はピーク (src 1.12s) 直前。
 	["melee_2", "res://assets/motions/mixamo_cross_punch.fbx", "mixamo_com",
-		0.55, 1.45, 1.3, 0.95, 1.28, 20.0, 7.0],
-	# フックは重さを出すため速度スケールを控えめに (1.15)。
+		0.80, 1.42, 1.7, 1.08, 1.27, 20.0, 7.0],
+	# 右フック。重さを出すため速度スケールを控えめに (1.15)。enable はピーク (src 0.75s) 直前。
 	["melee_3", "res://assets/motions/mixamo_hook_4.fbx", "mixamo_com",
-		0.45, 0.90, 1.15, 0.65, 0.85, 26.0, 9.0],
+		0.50, 0.92, 1.15, 0.72, 0.85, 26.0, 9.0],
 ]
 
 
-## [trim_start, trim_end] をキー単位で切り出した新しい Animation を作る。
-## 境界時刻の姿勢は補間値でキーを打ち、区間内のキーは時刻をシフトしてコピーする。
-func _trim(src: Animation, start: float, end: float) -> Animation:
+## [start, end] 区間を 60Hz で全トラックサンプリングし、密なキーで新規 Animation を
+## 構築する (ベイク方式)。時間スケールもここで直接埋め込む
+## (出力時刻 s に対しソース時刻 start + s*speed をサンプリング)。
+##
+## 旧方式の欠陥 2 点 (どちらも実行時の見た目多峰化・伸びっぱなしの原因):
+## 1. キー流用スライスは、キーが疎なトラックで区間境界外のポーズが補間で漏れ込む
+## 2. 事後の _scale_time は track_set_key_time がキー配列を並べ替えるため
+##    インデックスがずれ、一部のキーが未スケール/二重スケールになる
+##    (length だけ縮み、キー時刻は元のまま → クリップ前半だけの等速再生になっていた)
+## ベイク+直接スケールは元のキー配置・事後変換に一切依存しない。
+const BAKE_FPS: float = 60.0
+
+func _bake(src: Animation, start: float, end: float, speed: float) -> Animation:
 	var out := Animation.new()
-	out.length = end - start
+	out.length = (end - start) / speed
+	var dt := 1.0 / BAKE_FPS
 	for t in range(src.get_track_count()):
 		var type := src.track_get_type(t)
+		if type != Animation.TYPE_POSITION_3D \
+				and type != Animation.TYPE_ROTATION_3D \
+				and type != Animation.TYPE_SCALE_3D:
+			# ボーン姿勢以外のトラックは現状の素材に存在しない。
+			continue
 		var nt := out.add_track(type)
 		out.track_set_path(nt, src.track_get_path(t))
-		out.track_set_interpolation_type(nt, src.track_get_interpolation_type(t))
-		match type:
-			Animation.TYPE_POSITION_3D:
-				out.position_track_insert_key(nt, 0.0, src.position_track_interpolate(t, start))
-				for k in range(src.track_get_key_count(t)):
-					var tm := src.track_get_key_time(t, k)
-					if tm > start and tm < end:
-						out.position_track_insert_key(nt, tm - start, src.track_get_key_value(t, k))
-				out.position_track_insert_key(nt, end - start, src.position_track_interpolate(t, end))
-			Animation.TYPE_ROTATION_3D:
-				out.rotation_track_insert_key(nt, 0.0, src.rotation_track_interpolate(t, start))
-				for k in range(src.track_get_key_count(t)):
-					var tm := src.track_get_key_time(t, k)
-					if tm > start and tm < end:
-						out.rotation_track_insert_key(nt, tm - start, src.track_get_key_value(t, k))
-				out.rotation_track_insert_key(nt, end - start, src.rotation_track_interpolate(t, end))
-			Animation.TYPE_SCALE_3D:
-				out.scale_track_insert_key(nt, 0.0, src.scale_track_interpolate(t, start))
-				for k in range(src.track_get_key_count(t)):
-					var tm := src.track_get_key_time(t, k)
-					if tm > start and tm < end:
-						out.scale_track_insert_key(nt, tm - start, src.track_get_key_value(t, k))
-				out.scale_track_insert_key(nt, end - start, src.scale_track_interpolate(t, end))
-			_:
-				# その他のトラック型は区間内キーの単純コピー（現状の素材には存在しない）。
-				for k in range(src.track_get_key_count(t)):
-					var tm := src.track_get_key_time(t, k)
-					if tm >= start and tm <= end:
-						out.track_insert_key(nt, tm - start, src.track_get_key_value(t, k))
+		out.track_set_interpolation_type(nt, Animation.INTERPOLATION_LINEAR)
+		var s := 0.0
+		while s <= out.length + 0.0001:
+			var src_t := clampf(start + s * speed, 0.0, src.length)
+			match type:
+				Animation.TYPE_POSITION_3D:
+					out.position_track_insert_key(nt, s, src.position_track_interpolate(t, src_t))
+				Animation.TYPE_ROTATION_3D:
+					out.rotation_track_insert_key(nt, s, src.rotation_track_interpolate(t, src_t))
+				Animation.TYPE_SCALE_3D:
+					out.scale_track_insert_key(nt, s, src.scale_track_interpolate(t, src_t))
+			s += dt
 	return out
 
 
@@ -91,17 +94,6 @@ func _strip_hips_xz(anim: Animation) -> void:
 		for k in range(anim.track_get_key_count(t)):
 			var v: Vector3 = anim.track_get_key_value(t, k)
 			anim.track_set_key_value(t, k, Vector3(0.0, v.y, 0.0))
-
-
-## 全トラックのキー時刻と length を factor 倍する（factor<1 で再生が速くなる）。
-## 後ろのキーから set することで、同一トラック内の時刻衝突を避ける。
-func _scale_time(anim: Animation, factor: float) -> void:
-	for t in range(anim.get_track_count()):
-		var count := anim.track_get_key_count(t)
-		for k in range(count - 1, -1, -1):
-			var tm := anim.track_get_key_time(t, k)
-			anim.track_set_key_time(t, k, tm * factor)
-	anim.length = anim.length * factor
 
 
 func _find(node: Node, cls: String) -> Node:
@@ -152,17 +144,14 @@ func _build_one(entry: Array) -> bool:
 
 	var src: Animation = ap.get_animation(src_key)
 
-	# 1. パンチ区間の切り出し
-	var anim := _trim(src, trim_start, trim_end)
+	# 1. パンチ区間のベイク (60Hz 密キー、時間スケールはベイク内で埋め込み)
+	var anim := _bake(src, trim_start, trim_end, speed)
 	inst.free()
 
-	# 2. 時間スケール
-	_scale_time(anim, 1.0 / speed)
-
-	# 3. ルートモーション除去（Hips XZ）
+	# 2. ルートモーション除去（Hips XZ）
 	_strip_hips_xz(anim)
 
-	# 4. Call Method Track。root_node は Model(VRM) なので、Player はその親 ".."。
+	# 3. Call Method Track。root_node は Model(VRM) なので、Player はその親 ".."。
 	var track := anim.add_track(Animation.TYPE_METHOD)
 	anim.track_set_path(track, NodePath(".."))
 	var enable_local := (enable_t - trim_start) / speed

@@ -57,12 +57,14 @@ const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
 ## 打撃判定の開始（ジャブクリップの 29%）に合わせ、開始直後に届く押下
 ## （最初の押下のバウンスやパッドの二重イベント）を連鎖として拾わない。
 @export var chain_1_start_ratio: float = 0.30
-## melee_1 の連鎖受付窓の終了（再生割合）。既定は melee_1_out_ratio と同じ。
-@export var chain_1_end_ratio: float = 0.85
+## melee_1 の連鎖受付窓の終了（再生割合）。1.0 = 退出まで受け付ける。
+## out_ratio と同値にすると「振りの最終盤の押下」が退出との競合で握りつぶされ、
+## 連打中に入力が消える (c4 キャプチャの state CSV で実証)。
+@export var chain_1_end_ratio: float = 1.0
 ## melee_2 中の連鎖受付窓の開始（打撃判定の開始 44% に合わせる）。
 @export var chain_2_start_ratio: float = 0.45
-## melee_2 の連鎖受付窓の終了。既定は melee_2_out_ratio と同じ。
-@export var chain_2_end_ratio: float = 0.90
+## melee_2 の連鎖受付窓の終了。1.0 = 退出まで受け付ける (melee_1 と同じ理由)。
+@export var chain_2_end_ratio: float = 1.0
 @export_group("")
 
 signal combo_started()
