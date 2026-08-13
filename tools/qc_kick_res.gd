@@ -104,7 +104,10 @@ func _qc_one(ap: AnimationPlayer, skel: Skeleton3D, name: String, foot: String,
 		strike = series_knee
 	else:
 		strike = series_r if foot == "R" else series_l
+	# 逆足は常に足先 planar 指標で見る。strike が knee_y (閾値 0.90 等) のとき、
+	# 逆足 planar に同じ閾値を使うと決して超えず、軸足チェックが無効化される。
 	var off := series_l if foot == "R" else series_r
+	var off_threshold := 0.45 if metric == "knee_y" else threshold
 
 	var crossings := 0
 	for i in range(1, strike.size()):
@@ -112,7 +115,7 @@ func _qc_one(ap: AnimationPlayer, skel: Skeleton3D, name: String, foot: String,
 			crossings += 1
 	var off_crossings := 0
 	for i in range(1, off.size()):
-		if off[i - 1] < threshold and off[i] >= threshold:
+		if off[i - 1] < off_threshold and off[i] >= off_threshold:
 			off_crossings += 1
 
 	var peak := 0.0

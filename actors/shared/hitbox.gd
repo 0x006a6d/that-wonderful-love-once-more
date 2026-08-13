@@ -5,10 +5,14 @@ class_name Hitbox
 ## AnimationPlayer の Call Method Track から configure() と activate()/deactivate() を叩く。
 ## コード側でタイマーは持たない（§6.3）。
 ##
-## 命中検出は Hitbox が主導する:
-##   - 有効化した瞬間に既に重なっている Hurtbox を走査する（enable 時に重なり済みの相手）
-##   - 有効化中に新たに入ってきた Hurtbox は area_entered で拾う
-## どちらも Hurtbox.receive_hit() を呼ぶ。1 回の有効化中は同一相手を二重ヒットさせない。
+## 命中検出は area_entered に一本化する。monitoring を有効化すると、Godot は次の
+## 物理ステップで現在の重なりを再評価し、有効化時点で既に重なっていた Hurtbox に対しても
+## area_entered を送出する。したがって「有効化時に重なり済み」「有効化中に侵入」の両方を
+## area_entered が拾う。1 回の有効化中は同一相手を二重ヒットさせない。
+##
+## 注意: activate() 直後に get_overlapping_areas() を読む方式は使わない。有効化直後は
+## 物理判定キャッシュが未更新で、重なりが反映されず取りこぼす（同一物理ステップ内で
+## activate→deactivate すると特に顕著）。判定窓は必ず複数フレーム開ける。
 
 ## この Hitbox を出している本体（ノックバック方向の起点）。攻撃者。
 @export var source_body_path: NodePath = ^".."
@@ -43,13 +47,11 @@ func configure(new_damage: float, new_knockback: float, new_lethal: bool) -> voi
 	_already_hit.clear()
 
 
-## Call Method Track（またはコード）から。判定を有効化し、重なり済みの相手も拾う。
+## Call Method Track（またはコード）から。判定を有効化する。
+## 重なり済み・侵入いずれの相手も area_entered（次の物理ステップ）で拾う。
 func activate() -> void:
 	_active = true
 	monitoring = true
-	# 有効化フレームで既に重なっている相手を即座に処理する。
-	for area in get_overlapping_areas():
-		_try_hit(area as Area3D)
 
 
 ## 判定を無効化する。

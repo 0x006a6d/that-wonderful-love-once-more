@@ -25,6 +25,10 @@ var _melee: Node = null
 var _hitbox: Area3D = null
 var _playback: AnimationNodeStateMachinePlayback = null
 
+## 全体のハードタイムアウト（物理フレーム）。コンボが連鎖しない回帰が入っても
+## _physics_process が無限に回らないようにする（ヘッドレス/CI のハング防止）。
+const MAX_FRAMES := 4000
+
 var _frames: int = 0
 var _phase: int = 0
 var _phase_start: int = 0
@@ -107,6 +111,10 @@ func _reset_counters() -> void:
 
 func _physics_process(_delta: float) -> void:
 	_frames += 1
+	if _frames > MAX_FRAMES:
+		_assert("全ケースが MAX_FRAMES 内に完了した (phase=%d)" % _phase, false)
+		_finish()
+		return
 
 	if _hitbox != null:
 		if _hitbox.monitoring and not _prev_monitoring:

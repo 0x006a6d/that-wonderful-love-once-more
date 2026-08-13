@@ -26,6 +26,9 @@ signal act_changed(act: int)
 var current_act: int = GameTypes.Act.PROLOGUE
 
 var _breach_timer: SceneTreeTimer = null
+## タイマーの世代番号。reset() や再タイマーで加算し、古いコールバックを無視する。
+## SceneTreeTimer は null 代入では止まらず timeout を送出するため、世代で識別する。
+var _breach_timer_generation: int = 0
 
 
 ## 任意の幕へ直接移行する。同じ幕への再移行は無視する。
@@ -60,11 +63,16 @@ func notify_all_robbers_downed() -> void:
 ## ENGAGEMENT 開始時に BREACH までのタイマーを張る。
 ## player_fired_gun が立っていれば待機時間を短縮する。
 func _start_breach_timer() -> void:
+	_breach_timer_generation += 1
+	var generation := _breach_timer_generation
 	var delay := breach_delay
 	if RunState.player_fired_gun:
 		delay *= breach_gun_shorten
 	_breach_timer = get_tree().create_timer(delay)
-	_breach_timer.timeout.connect(_on_breach_timer_timeout)
+	# SceneTreeTimer は停止できないため、発火時に世代が一致する場合のみ処理する。
+	_breach_timer.timeout.connect(func() -> void:
+		if generation == _breach_timer_generation:
+			_on_breach_timer_timeout())
 
 
 func _on_breach_timer_timeout() -> void:
@@ -74,7 +82,9 @@ func _on_breach_timer_timeout() -> void:
 
 
 ## 進行をやり直す。RunState.reset() と併せて呼ぶ。
+## 世代番号を進めて、進行中の古い BREACH タイマーのコールバックを無効化する。
 func reset() -> void:
+	_breach_timer_generation += 1
 	_breach_timer = null
 	current_act = GameTypes.Act.PROLOGUE
 	act_changed.emit(current_act)

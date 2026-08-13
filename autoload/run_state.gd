@@ -11,7 +11,7 @@ class DownedRecord:
 	var lethal: bool = false
 
 signal civilian_downed(total: int)
-signal deviation_changed(level: int)
+signal deviation_changed(level: float)
 
 var civilians_total: int = 0
 var civilians_downed: int = 0
