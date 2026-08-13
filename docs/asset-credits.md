@@ -21,9 +21,9 @@
 
 ## モーション: Mixamo モーション一式 (Adobe Mixamo)
 
-- ファイル: `assets/motions/mixamo_*.fbx` (計 34 本)
+- ファイル: `assets/motions/mixamo_*.fbx` (計 38 本)
   - パンチ (11): `mixamo_jab_left` (Lead Jab) / `mixamo_cross_punch` / `mixamo_combo_punch` / `mixamo_punch_combo` / `mixamo_hook_1..4` / `mixamo_elbow_1..3`
-  - キック (3): `mixamo_kick_chapa` (Chapa-Giratoria) / `mixamo_kick_martelo` (Martelo 2) / `mixamo_kick_standing` (Standing Melee Kick)
+  - キック・ひざ (7): `mixamo_kick_soccer` (Kick Soccerball) / `mixamo_knee` (Illegal Knee) / `mixamo_kick_finish` (Kicking) / `mixamo_knee_jab` (Knee Jab) / `mixamo_kick_chapa` (Chapa-Giratoria) / `mixamo_kick_martelo` (Martelo 2) / `mixamo_kick_standing` (Standing Melee Kick)
   - 構え (1): `mixamo_boxing_idle` (Boxing)
   - 被弾リアクション (4): `mixamo_hit_react_1` (Hit Reaction) / `mixamo_hit_react_large_front` / `mixamo_hit_react_large_right` / `mixamo_hit_react_small` (Standing React Large From Front/Right, Small From Right)
   - 回避・移動 (4): `mixamo_dodge_backward` (Standing Dodge Backward) / `mixamo_dive_roll` (Running Dive Roll) / `mixamo_backslide` (Sprint To Backslide) / `mixamo_fall_land_idle` (Fall B Land To Standing Idle)
@@ -48,6 +48,10 @@ Mixamo で各モーションを検索・ダウンロードする際の検索名�
 | Illegal Elbow Punch (バリエーション 2) | `mixamo_elbow_2.fbx` |
 | Illegal Elbow Punch (バリエーション 3) | `mixamo_elbow_3.fbx` |
 | Boxing | `mixamo_boxing_idle.fbx` |
+| Kick Soccerball | `mixamo_kick_soccer.fbx` |
+| Illegal Knee | `mixamo_knee.fbx` |
+| Kicking | `mixamo_kick_finish.fbx` |
+| Knee Jab | `mixamo_knee_jab.fbx` |
 | Chapa-Giratoria | `mixamo_kick_chapa.fbx` |
 | Martelo 2 | `mixamo_kick_martelo.fbx` |
 | Standing Melee Kick | `mixamo_kick_standing.fbx` |
