@@ -1,18 +1,33 @@
 extends SpringArm3D
 
-## サードパーソンカメラの回転リグ。マウス移動でヨー（自身の Y 回転）と
-## ピッチ（自身の X 回転）を制御する。壁のめり込みは SpringArm3D が自動処理する。
-## マウス感度は player.gd から configure() で注入される。
+## サードパーソンカメラの回転リグ（キーボード/パッド完結。マウス非使用）。
+##
+## - 自動追従: プレイヤーが移動している間、ヨーを「移動方向の背後」へ緩やかに補間する。
+##   停止中は現在角を維持する
+## - 手動オービット: camera_left / camera_right（←→ , . / 右スティック横）の押下中は
+##   入力強度に応じて回転し、直後は自動追従を manual_suppress_time 秒抑制する
+## - ピッチは固定（見下ろし微角度 pitch_angle）。上下操作は持たない
+## - 移動方向は player.gd から set_move_direction() で毎フレーム注入される（直接参照なし）
+##
+## TODO(ロックオン実装時): ロックオン中は「対象を画面に収める」ヨー制御を最優先に挟む。
+## マウス操作対応は将来のオプション（現状の入力マップには含まれない）。
 
-## ピッチのクランプ（ラジアン）。下向き・上向きの見込み角を制限する。
-@export var pitch_min: float = -1.2
-@export var pitch_max: float = 0.5
 ## SpringArm の腕の長さ（カメラ距離）。身長160cm 基準の三人称距離。
 @export var arm_length: float = 3.5
+## 固定ピッチ（ラジアン、負で見下ろし）。
+@export var pitch_angle: float = -0.35
+## 自動追従の補間速さ（大きいほど素早く背後に回り込む）。
+@export var follow_speed: float = 2.5
+## 手動オービットの回転速度（rad/s、入力強度 1.0 のとき）。
+@export var orbit_speed: float = 2.8
+## 手動オービット後に自動追従を抑制する時間（秒）。
+@export var manual_suppress_time: float = 2.0
+## オービット入力のデッドゾーン（パッドのスティックドリフト対策）。
+@export var orbit_deadzone: float = 0.15
 
-var _mouse_sensitivity: float = 0.003
 var _yaw: float = 0.0
-var _pitch: float = -0.2
+var _move_dir: Vector3 = Vector3.ZERO
+var _suppress_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -20,22 +35,26 @@ func _ready() -> void:
 	# world レイヤー(1)の障害物に対してのみ縮む。
 	collision_mask = 1
 	_yaw = rotation.y
-	_pitch = rotation.x
+	rotation.x = pitch_angle
 
 
-## player.gd からマウス感度を注入する。
-func configure(mouse_sensitivity: float) -> void:
-	_mouse_sensitivity = mouse_sensitivity
+## player.gd から毎フレーム注入される移動方向（ワールド水平、停止時は ZERO）。
+func set_move_direction(direction: Vector3) -> void:
+	_move_dir = direction
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		return
-	var motion := event as InputEventMouseMotion
-	if motion == null:
-		return
-	_yaw -= motion.relative.x * _mouse_sensitivity
-	_pitch -= motion.relative.y * _mouse_sensitivity
-	_pitch = clampf(_pitch, pitch_min, pitch_max)
+func _physics_process(delta: float) -> void:
+	# 手動オービット（キー ±1.0 / スティックは倒し量が強度になる）。
+	var axis := Input.get_axis("camera_left", "camera_right")
+	if absf(axis) > orbit_deadzone:
+		_yaw -= axis * orbit_speed * delta
+		_suppress_timer = manual_suppress_time
+	elif _suppress_timer > 0.0:
+		_suppress_timer -= delta
+	elif _move_dir.length() > 0.1:
+		# 自動追従: カメラの視線 (-Z) が移動方向と一致するヨーへ補間。
+		var desired := atan2(-_move_dir.x, -_move_dir.z)
+		_yaw = lerp_angle(_yaw, desired, 1.0 - exp(-follow_speed * delta))
+
 	rotation.y = _yaw
-	rotation.x = _pitch
+	rotation.x = pitch_angle
