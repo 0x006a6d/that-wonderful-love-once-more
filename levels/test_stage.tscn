@@ -1,7 +1,8 @@
-[gd_scene load_steps=13 format=3 uid="uid://cteststage0001"]
+[gd_scene load_steps=14 format=3 uid="uid://cteststage0001"]
 
 [ext_resource type="Script" path="res://levels/test_stage.gd" id="1_stage"]
 [ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://cdummy0nikeche01" path="res://actors/npc/dummy.tscn" id="3_dummy"]
 
 [sub_resource type="Environment" id="Env_stage"]
 background_mode = 1
@@ -158,3 +159,9 @@ surface_material_override/0 = SubResource("Mat_pillar")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 2)
+
+[node name="Dummy1" parent="." instance=ExtResource("3_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 3)
+
+[node name="Dummy2" parent="." instance=ExtResource("3_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 5)
