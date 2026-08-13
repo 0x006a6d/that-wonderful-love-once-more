@@ -42,7 +42,15 @@ materials/extract_path=""
 _subresources={
 "nodes": {
 "PATH:Rig/Skeleton3D": {
-"retarget/bone_map": Resource("res://assets/motions/universal_animation_library_bone_map.tres")
+"retarget/bone_map": Resource("res://assets/motions/universal_animation_library_bone_map.tres"),
+"retarget/rest_fixer/apply_node_transforms": true,
+"retarget/rest_fixer/fix_silhouette/base_height_adjustment": 1.0,
+"retarget/rest_fixer/fix_silhouette/enable": false,
+"retarget/rest_fixer/fix_silhouette/filter": [],
+"retarget/rest_fixer/fix_silhouette/threshold": 15.0,
+"retarget/rest_fixer/keep_global_rest_on_leftovers": true,
+"retarget/rest_fixer/normalize_position_tracks": true,
+"retarget/rest_fixer/overwrite_axis": true
 }
 }
 }

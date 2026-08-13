@@ -5,7 +5,11 @@ extends Node3D
 
 const MOTION_SCENE: String = "res://assets/motions/universal_animation_library.gltf"
 const VRM_SCENE: String = "res://assets/vrm/nikechan_v2.vrm"
-const ATTACK_ANIM: String = "Punch_Cross"
+
+# 数値 QC の結果、3 本のパンチのうち拳が肩の高さ (拳高さ−肩高さ ≈ +0.04m) で
+# 前方に伸びる Punch_Jab が最も綺麗な右ストレートに近いため既定採用。
+# エディタのインスペクタから差し替え可能。
+@export var animation_name: String = "Punch_Jab"
 
 var _anim_player: AnimationPlayer = null
 var _skeleton: Skeleton3D = null
@@ -58,7 +62,7 @@ func _ready() -> void:
 	_anim_player.add_animation_library("motion", lib_copy)
 	motion_inst.free()
 
-	var anim_key: String = "motion/" + ATTACK_ANIM
+	var anim_key: String = "motion/" + animation_name
 	if not _anim_player.has_animation(anim_key):
 		push_error("attack animation not found: " + anim_key)
 		return
