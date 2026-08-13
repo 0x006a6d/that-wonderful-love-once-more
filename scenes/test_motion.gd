@@ -3,30 +3,15 @@ extends Node3D
 # 借り物モーション (Quaternius / Mixamo) を nikechan_v2.vrm の GeneralSkeleton に
 # リターゲット済みトラックで再生する検証シーン。
 #
-# Quaternius (Universal Animation Library) は "motion/" ライブラリに、
-# Mixamo パンチ一式は "mixamo/" ライブラリに登録する。
+# assets/motions/ 以下を走査して自動登録する:
+#   - *.gltf -> "motion/" ライブラリ (Quaternius。内蔵アニメ名をそのまま使う)
+#   - mixamo_*.fbx -> "mixamo/" ライブラリ (各 FBX の内蔵アニメ名は "mixamo_com" で
+#     共通のため、ファイル名から表示名を導出する。例: mixamo_cross_punch -> Cross_Punch)
 # animation_name は "<library>/<anim>" 形式で指定する。
 #   例: "mixamo/Cross_Punch" / "motion/Punch_Jab"
 
 const VRM_SCENE: String = "res://assets/vrm/nikechan_v2.vrm"
-
-# Quaternius glTF (1 本に 46 アニメ)。ライブラリキー "motion"。
-const QUATERNIUS_SCENE: String = "res://assets/motions/universal_animation_library.gltf"
-
-# Mixamo FBX 一式。各 FBX の内蔵アニメ名は "mixamo_com" で共通のため、
-# ここで表示名 -> FBX パスの対応を持ち、"mixamo" ライブラリに固有キーで登録する。
-const MIXAMO_SOURCES: Array = [
-	["Cross_Punch", "res://assets/motions/mixamo_cross_punch.fbx"],
-	["Combo_Punch", "res://assets/motions/mixamo_combo_punch.fbx"],
-	["Punch_Combo", "res://assets/motions/mixamo_punch_combo.fbx"],
-	["Hook_1", "res://assets/motions/mixamo_hook_1.fbx"],
-	["Hook_2", "res://assets/motions/mixamo_hook_2.fbx"],
-	["Hook_3", "res://assets/motions/mixamo_hook_3.fbx"],
-	["Hook_4", "res://assets/motions/mixamo_hook_4.fbx"],
-	["Elbow_1", "res://assets/motions/mixamo_elbow_1.fbx"],
-	["Elbow_2", "res://assets/motions/mixamo_elbow_2.fbx"],
-	["Elbow_3", "res://assets/motions/mixamo_elbow_3.fbx"],
-]
+const MOTIONS_DIR: String = "res://assets/motions"
 
 # 数値 QC の結果、Mixamo Cross_Punch が拳ほぼ肩高さ (拳高さ−肩高さ ≈ +0.063m) で
 # 前方距離 0.448m と最も伸びのある右ストレートのため既定採用。
@@ -73,8 +58,7 @@ func _ready() -> void:
 	# AnimationPlayer が %GeneralSkeleton を解決できるよう root を VRM ルートにする。
 	_anim_player.root_node = _anim_player.get_path_to(vrm)
 
-	_register_quaternius()
-	_register_mixamo()
+	_register_motion_libraries()
 
 	if not _anim_player.has_animation(animation_name):
 		push_error("attack animation not found: " + animation_name)
@@ -92,34 +76,76 @@ func _ready() -> void:
 		print("[test_motion] tracking bone RightLowerArm idx=", _sampled_bone)
 
 
-func _register_quaternius() -> void:
-	var motion_packed: PackedScene = load(QUATERNIUS_SCENE) as PackedScene
-	var motion_inst: Node = motion_packed.instantiate()
-	var src_ap: AnimationPlayer = _find_node_by_class(motion_inst, "AnimationPlayer") as AnimationPlayer
-	var lib: AnimationLibrary = src_ap.get_animation_library("")
-	var lib_copy: AnimationLibrary = lib.duplicate(true) as AnimationLibrary
+# assets/motions/ を走査し、gltf -> "motion"、mixamo_*.fbx -> "mixamo" として登録する。
+func _register_motion_libraries() -> void:
+	var gltf_lib: AnimationLibrary = AnimationLibrary.new()
+	var mixamo_lib: AnimationLibrary = AnimationLibrary.new()
+
+	var dir: DirAccess = DirAccess.open(MOTIONS_DIR)
+	if dir == null:
+		push_error("cannot open " + MOTIONS_DIR)
+		return
+	var files: PackedStringArray = PackedStringArray()
+	dir.list_dir_begin()
+	var fname: String = dir.get_next()
+	while fname != "":
+		if not dir.current_is_dir():
+			# エディタ外 (エクスポート後) では ".import" 越しの remap 名になる場合が
+			# あるため、拡張子は get_basename 側でも判定する。
+			if fname.ends_with(".gltf") or fname.ends_with(".fbx"):
+				files.append(fname)
+		fname = dir.get_next()
+	dir.list_dir_end()
+	files.sort()
+
+	for f in files:
+		var path: String = MOTIONS_DIR + "/" + f
+		var packed: PackedScene = load(path) as PackedScene
+		if packed == null:
+			push_warning("motion load failed: " + path)
+			continue
+		var inst: Node = packed.instantiate()
+		var src_ap: AnimationPlayer = _find_node_by_class(inst, "AnimationPlayer") as AnimationPlayer
+		if src_ap == null:
+			inst.free()
+			continue
+		var anims: PackedStringArray = src_ap.get_animation_list()
+		if f.ends_with(".gltf"):
+			# glTF は内蔵アニメ名をそのまま "motion" ライブラリへ
+			for a in anims:
+				var key: String = a.get_slice("/", a.get_slice_count("/") - 1)
+				if not gltf_lib.has_animation(key):
+					gltf_lib.add_animation(key, src_ap.get_animation(a).duplicate(true) as Animation)
+		else:
+			# FBX はファイル名から表示名を導出 (mixamo_cross_punch -> Cross_Punch)。
+			# アニメが複数あれば "<表示名>_<アニメ名>" で衝突回避。
+			var disp: String = _display_name_from_file(f)
+			for a in anims:
+				var key: String = disp if anims.size() == 1 else disp + "_" + a.get_file()
+				if not mixamo_lib.has_animation(key):
+					mixamo_lib.add_animation(key, src_ap.get_animation(a).duplicate(true) as Animation)
+		inst.free()
+
 	if _anim_player.has_animation_library("motion"):
 		_anim_player.remove_animation_library("motion")
-	_anim_player.add_animation_library("motion", lib_copy)
-	motion_inst.free()
-
-
-func _register_mixamo() -> void:
-	var lib: AnimationLibrary = AnimationLibrary.new()
-	for entry in MIXAMO_SOURCES:
-		var disp: String = entry[0]
-		var fbx_path: String = entry[1]
-		var motion_packed: PackedScene = load(fbx_path) as PackedScene
-		if motion_packed == null:
-			continue
-		var motion_inst: Node = motion_packed.instantiate()
-		var src_ap: AnimationPlayer = _find_node_by_class(motion_inst, "AnimationPlayer") as AnimationPlayer
-		var src_anim: Animation = src_ap.get_animation("mixamo_com")
-		lib.add_animation(disp, src_anim.duplicate(true) as Animation)
-		motion_inst.free()
+	_anim_player.add_animation_library("motion", gltf_lib)
 	if _anim_player.has_animation_library("mixamo"):
 		_anim_player.remove_animation_library("mixamo")
-	_anim_player.add_animation_library("mixamo", lib)
+	_anim_player.add_animation_library("mixamo", mixamo_lib)
+	print("[test_motion] registered motion/=", gltf_lib.get_animation_list().size(), \
+			" mixamo/=", mixamo_lib.get_animation_list().size())
+
+
+# "mixamo_cross_punch.fbx" -> "Cross_Punch" / "mixamo_hook_1.fbx" -> "Hook_1"
+func _display_name_from_file(fname: String) -> String:
+	var base: String = fname.get_basename()
+	if base.begins_with("mixamo_"):
+		base = base.substr(7)
+	var parts: PackedStringArray = base.split("_")
+	var out: PackedStringArray = PackedStringArray()
+	for p in parts:
+		out.append(p.capitalize() if p.length() > 0 else p)
+	return "_".join(out)
 
 
 func _process(_delta: float) -> void:
