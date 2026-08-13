@@ -2,19 +2,25 @@ extends Node
 class_name Health
 
 ## NPC/プレイヤー共通の体力・よろけ管理。technical-spec §7.1。
-## take_hit(damage) でよろけ回数を数え、stagger_threshold 回に達したら downed を送る。
-## ダウンが致死かどうか (lethal) は現在HPが lethal_hp_threshold 以下かで判定する。
+##
+## 意味論:
+## - staggered: ダウンに至らない被弾のたびに発火する
+## - downed: HP が 0 まで削られたときに発火する。ただし被弾回数が
+##   stagger_threshold に達するまではダウンさせない（客の「規定回数叩かないと
+##   ダウンしない」誤爆防止ルールはこの下限として機能する。HP が先に尽きても
+##   回数未達なら HP 0 のまま耐えてよろけ扱いになる）
 
 ## 最大HP。
 @export var max_hp: float = 100.0
-## ダウンに要する被弾回数。客は 3（誤爆防止）、犯人・ダミーは 1。
+## ダウンに要する最低被弾回数。客は 3（誤爆防止）、犯人・ダミーは 1。
 @export var stagger_threshold: int = 1
-## この値以下のHPまで削られた被弾は致死ダウンとして扱う（0.0 = 致死しない）。
+## 致死ダウン判定のしきい値（将来用）。lethal の確定方法は 8/22 の客実装時に
+## 詰めるため、現時点では未使用。downed は lethal=false 固定で発火する。
 @export var lethal_hp_threshold: float = 0.0
 
 ## よろけ（ダウンには至らない被弾）が発生した。
 signal staggered()
-## ダウンした。lethal=true なら致死。
+## ダウンした。lethal=true なら致死（現時点では常に false。上記コメント参照）。
 signal downed(lethal: bool)
 
 var _hp: float = 0.0
@@ -33,10 +39,10 @@ func take_hit(damage: float) -> void:
 	_hp = maxf(_hp - damage, 0.0)
 	_stagger_count += 1
 
-	var lethal := _hp <= lethal_hp_threshold
-	if _stagger_count >= stagger_threshold or lethal:
+	if _hp <= 0.0 and _stagger_count >= stagger_threshold:
 		_is_downed = true
-		downed.emit(lethal)
+		# lethal は 8/22（客実装）で確定方法を詰める。今日は false 固定。
+		downed.emit(false)
 	else:
 		staggered.emit()
 
