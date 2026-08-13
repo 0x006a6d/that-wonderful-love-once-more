@@ -29,10 +29,17 @@ extends SpringArm3D
 ## カメラ相対入力では目標ヨーが常に現在ヨーから一定角ずれるため、
 ## 角度差の閾値では真横移動の永久旋回を防げない（実測で確認済み）。
 @export var follow_forward_min: float = 0.1
+## 移動の開始/停止時に入れる縦揺れの深さ（m）。0 で無効（既定）。
+## 着地感・接地感の下地。数値は人間が実機で調整する。
+@export var start_stop_bob: float = 0.0
+## 縦揺れ 1 回（沈み→復帰）の所要時間（秒）。
+@export var bob_duration: float = 0.16
 
 var _yaw: float = 0.0
 var _move_dir: Vector3 = Vector3.ZERO
 var _suppress_timer: float = 0.0
+var _base_y: float = 0.0
+var _bob_tween: Tween = null
 
 
 func _ready() -> void:
@@ -41,11 +48,31 @@ func _ready() -> void:
 	collision_mask = 1
 	_yaw = rotation.y
 	rotation.x = pitch_angle
+	_base_y = position.y
 
 
 ## player.gd から毎フレーム注入される移動方向（ワールド水平、停止時は ZERO）。
+## 移動の開始/停止の切り替わりで縦揺れ（start_stop_bob > 0 のときのみ）を打つ。
 func set_move_direction(direction: Vector3) -> void:
+	var was_moving := _move_dir.length() > 0.1
+	var is_moving := direction.length() > 0.1
+	if was_moving != is_moving:
+		_start_bob()
 	_move_dir = direction
+
+
+## 沈み → 復帰の小さな縦揺れ。強度 0 なら何もしない。
+func _start_bob() -> void:
+	if start_stop_bob <= 0.0:
+		return
+	if _bob_tween != null and _bob_tween.is_valid():
+		_bob_tween.kill()
+	position.y = _base_y
+	_bob_tween = create_tween()
+	_bob_tween.tween_property(self, "position:y", _base_y - start_stop_bob, bob_duration * 0.4) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_bob_tween.tween_property(self, "position:y", _base_y, bob_duration * 0.6) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
 
 func _physics_process(delta: float) -> void:

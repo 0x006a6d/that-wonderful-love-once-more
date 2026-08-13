@@ -14,19 +14,36 @@ extends Node
 ## ゲームロジック（player.gd）→ このノード（AnimationTree駆動）の一方向依存のみ。
 ## Call Method Track が叩く _enable_hitbox / _disable_hitbox は player.gd 側に置く。
 
-## Quaternius universal ライブラリ。glTF インポータが "_Loop" サフィックスを
-## 剥がして loop フラグへ変換するため、実アニメ名は "Idle" / "Walk" / "Jog_Fwd"。
-const UNIV_MOTION: String = "res://assets/motions/universal_animation_library.gltf"
-const IDLE_KEY: String = "Idle"
-const WALK_KEY: String = "Walk"
-const JOG_KEY: String = "Jog_Fwd"
 const MELEE_1_RES: String = "res://actors/player/anim/melee_1.res"
 const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
 
 ## VRM をインスタンス化した Model ノード。
 @export var model_path: NodePath = ^"../Model"
-## locomotion ブレンドの基準速度（この速度で blend=1.0=ジョグ）。
+
+@export_group("Locomotion Clips")
+## 待機クリップ。Quaternius universal は glTF インポータが "_Loop" を剥がすため
+## 実アニメ名は "Idle"。
+@export_file("*.gltf", "*.fbx") var idle_scene: String = "res://assets/motions/universal_animation_library.gltf"
+@export var idle_key: String = "Idle"
+## 歩行クリップ（Mixamo In Place。逸脱時は mixamo_walk_female / mixamo_walk_catwalk
+## に差し替え候補あり。パスとキーを変えるだけで試せる）。
+@export_file("*.gltf", "*.fbx") var walk_scene: String = "res://assets/motions/mixamo_walk.fbx"
+@export var walk_key: String = "mixamo_com"
+## 走行クリップ（Mixamo In Place）。
+@export_file("*.gltf", "*.fbx") var run_scene: String = "res://assets/motions/mixamo_run.fbx"
+@export var run_key: String = "mixamo_com"
+
+@export_group("Locomotion Sync")
+## locomotion ブレンドの基準速度（この速度で blend=1.0=走り）。
 @export var locomotion_max_speed: float = 4.5
+## 歩行クリップの本来の移動速度（m/s。tools/measure_stride.gd の実測: 1.53）。
+@export var walk_natural_speed: float = 1.53
+## 走行クリップの本来の移動速度（m/s。実測: 2.74）。
+@export var run_natural_speed: float = 2.74
+## アニメ再生速度スケールのクランプ範囲（足の周期を実速度へ寄せる際の上下限）。
+@export var anim_speed_limits: Vector2 = Vector2(0.8, 1.8)
+
+@export_group("")
 ## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 77% の直後。
 ## クリップはパンチ区間だけに切り出し済みなので、ほぼ振り切ってから抜ける）。
 @export var melee_1_out_ratio: float = 0.85
@@ -97,7 +114,27 @@ func set_locomotion(speed: float) -> void:
 	if _tree == null:
 		return
 	var blend := clampf(speed / locomotion_max_speed, 0.0, 1.0)
-	_tree.set("parameters/locomotion/blend_position", blend)
+	_tree.set("parameters/locomotion/blend/blend_position", blend)
+	# アニメ再生速度を地面速度に同期する。ブレンド位置に対応する
+	# クリップ本来の速度 (natural) で実速度を割った値が再生スケール。
+	# blend<=0.5 (idle↔walk) では natural も blend に比例するため一定値に収束し、
+	# 停止直前に再生スケールが暴れない。
+	_tree.set("parameters/locomotion/speed/scale", _anim_speed_scale(speed, blend))
+
+
+## 実移動速度とブレンド位置からアニメ再生スケールを求める。
+func _anim_speed_scale(speed: float, blend: float) -> float:
+	if speed < 0.1 or blend < 0.01:
+		return 1.0
+	var natural: float
+	if blend <= 0.5:
+		# idle(0) → walk(0.5): natural は歩行速度へ比例で立ち上がる。
+		natural = walk_natural_speed * (blend / 0.5)
+	else:
+		natural = lerpf(walk_natural_speed, run_natural_speed, (blend - 0.5) / 0.5)
+	if natural < 0.01:
+		return 1.0
+	return clampf(speed / natural, anim_speed_limits.x, anim_speed_limits.y)
 
 
 ## 攻撃入力。locomotion なら melee_1 開始、melee_1 中なら次段をバッファ。
@@ -127,27 +164,27 @@ func _finish_combo() -> void:
 func _build_library() -> bool:
 	var lib := AnimationLibrary.new()
 
-	var idle := _extract(UNIV_MOTION, IDLE_KEY)
+	var idle := _extract(idle_scene, idle_key)
 	if idle == null:
-		push_warning("player_melee: idle (%s) load failed" % IDLE_KEY)
+		push_warning("player_melee: idle (%s) load failed" % idle_key)
 		return false
 	idle.loop_mode = Animation.LOOP_LINEAR
 	lib.add_animation("idle", idle)
 
-	var walk := _extract(UNIV_MOTION, WALK_KEY)
+	var walk := _extract(walk_scene, walk_key)
 	if walk != null:
 		walk.loop_mode = Animation.LOOP_LINEAR
 		lib.add_animation("walk", walk)
 	else:
-		push_warning("player_melee: walk (%s) load failed。idle で代用" % WALK_KEY)
+		push_warning("player_melee: walk (%s) load failed。idle で代用" % walk_key)
 		lib.add_animation("walk", idle.duplicate(true) as Animation)
 
-	var jog := _extract(UNIV_MOTION, JOG_KEY)
+	var jog := _extract(run_scene, run_key)
 	if jog != null:
 		jog.loop_mode = Animation.LOOP_LINEAR
 		lib.add_animation("jog", jog)
 	else:
-		push_warning("player_melee: jog (%s) load failed。idle で代用" % JOG_KEY)
+		push_warning("player_melee: run (%s) load failed。idle で代用" % run_key)
 		lib.add_animation("jog", idle.duplicate(true) as Animation)
 
 	var m1 := load(MELEE_1_RES) as Animation
@@ -191,7 +228,8 @@ func _extract(scene_path: String, key: String) -> Animation:
 func _build_tree() -> void:
 	var sm := AnimationNodeStateMachine.new()
 
-	# locomotion: idle(0.0) / walk(0.5) / jog(1.0) の BlendSpace1D（速度でブレンド）
+	# locomotion: idle(0.0) / walk(0.5) / run(1.0) の BlendSpace1D（速度でブレンド）を
+	# TimeScale ノード付きの BlendTree に包み、足の周期を実移動速度へ同期できるようにする。
 	var blend := AnimationNodeBlendSpace1D.new()
 	blend.min_space = 0.0
 	blend.max_space = 1.0
@@ -203,17 +241,23 @@ func _build_tree() -> void:
 	n_walk.resource_name = "walk"
 	var n_jog := AnimationNodeAnimation.new()
 	n_jog.animation = "player/jog"
-	n_jog.resource_name = "jog"
+	n_jog.resource_name = "run"
 	blend.add_blend_point(n_idle, 0.0, -1)
 	blend.add_blend_point(n_walk, 0.5, -1)
 	blend.add_blend_point(n_jog, 1.0, -1)
+
+	var loco := AnimationNodeBlendTree.new()
+	loco.add_node("blend", blend, Vector2(0, 0))
+	loco.add_node("speed", AnimationNodeTimeScale.new(), Vector2(250, 0))
+	loco.connect_node("speed", 0, "blend")
+	loco.connect_node("output", 0, "speed")
 
 	var n_m1 := AnimationNodeAnimation.new()
 	n_m1.animation = "player/melee_1"
 	var n_m2 := AnimationNodeAnimation.new()
 	n_m2.animation = "player/melee_2"
 
-	sm.add_node("locomotion", blend, Vector2(0, 0))
+	sm.add_node("locomotion", loco, Vector2(0, 0))
 	sm.add_node("melee_1", n_m1, Vector2(300, 0))
 	sm.add_node("melee_2", n_m2, Vector2(600, 0))
 

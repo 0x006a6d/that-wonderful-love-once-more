@@ -56,7 +56,7 @@ func _physics_process(_delta: float) -> bool:
 		if _frames >= 65:
 			_idle_pos = (_skel.global_transform * _skel.get_bone_global_pose(_hand)).origin
 			var tree := _melee.get_node_or_null("AnimationTree") as AnimationTree
-			print("[idle] hand=", _idle_pos, " blend=", tree.get("parameters/locomotion/blend_position"))
+			print("[idle] hand=", _idle_pos, " blend=", tree.get("parameters/locomotion/blend/blend_position"))
 			_phase = 2
 	elif _phase == 2:
 		# move にして 60f。
@@ -64,7 +64,7 @@ func _physics_process(_delta: float) -> bool:
 		if _frames >= 130:
 			var pos := (_skel.global_transform * _skel.get_bone_global_pose(_hand)).origin
 			var tree := _melee.get_node_or_null("AnimationTree") as AnimationTree
-			print("[move] hand=", pos, " blend=", tree.get("parameters/locomotion/blend_position"))
+			print("[move] hand=", pos, " blend=", tree.get("parameters/locomotion/blend/blend_position"))
 			print("[diff] idle→move hand moved=", "%.4f" % _idle_pos.distance_to(pos), " m")
 			quit(0)
 			return true
