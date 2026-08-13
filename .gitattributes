@@ -4,5 +4,6 @@
 *.jpg binary
 *.vrm binary
 *.glb binary
+*.bin binary
 *.wav binary
 *.ogg binary
