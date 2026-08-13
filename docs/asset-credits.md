@@ -21,8 +21,8 @@
 
 ## モーション: Mixamo モーション一式 (Adobe Mixamo)
 
-- ファイル: `assets/motions/mixamo_*.fbx` (計 33 本)
-  - パンチ (10): `mixamo_cross_punch` / `mixamo_combo_punch` / `mixamo_punch_combo` / `mixamo_hook_1..4` / `mixamo_elbow_1..3`
+- ファイル: `assets/motions/mixamo_*.fbx` (計 34 本)
+  - パンチ (11): `mixamo_jab_left` (Lead Jab) / `mixamo_cross_punch` / `mixamo_combo_punch` / `mixamo_punch_combo` / `mixamo_hook_1..4` / `mixamo_elbow_1..3`
   - キック (3): `mixamo_kick_chapa` (Chapa-Giratoria) / `mixamo_kick_martelo` (Martelo 2) / `mixamo_kick_standing` (Standing Melee Kick)
   - 構え (1): `mixamo_boxing_idle` (Boxing)
   - 被弾リアクション (4): `mixamo_hit_react_1` (Hit Reaction) / `mixamo_hit_react_large_front` / `mixamo_hit_react_large_right` / `mixamo_hit_react_small` (Standing React Large From Front/Right, Small From Right)
@@ -36,6 +36,7 @@ Mixamo で各モーションを検索・ダウンロードする際の検索名�
 
 | Mixamo 検索名 | 配置ファイル名 |
 | --- | --- |
+| Lead Jab | `mixamo_jab_left.fbx` |
 | Cross Punch | `mixamo_cross_punch.fbx` |
 | Combo Punch | `mixamo_combo_punch.fbx` |
 | Punch Combo | `mixamo_punch_combo.fbx` |

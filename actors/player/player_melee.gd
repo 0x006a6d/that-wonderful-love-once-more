@@ -45,18 +45,20 @@ const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
 @export var anim_speed_limits: Vector2 = Vector2(0.8, 1.8)
 
 @export_group("Combo")
-## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 81% の直後）。
-@export var melee_1_out_ratio: float = 0.90
-## melee_2 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 81% の直後）。
+## melee_1（左ジャブ）をこの再生割合まで進めたら次段/待機へ抜ける
+## （判定窓の終了 73% の直後）。
+@export var melee_1_out_ratio: float = 0.85
+## melee_2（右ストレート）をこの再生割合まで進めたら次段/待機へ抜ける
+## （判定窓の終了 81% の直後）。
 @export var melee_2_out_ratio: float = 0.90
-## melee_3 をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 89% の直後）。
+## melee_3（右フック）をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 89% の直後）。
 @export var melee_3_out_ratio: float = 0.95
 ## melee_1 中に連鎖入力（再押下）を受け付ける窓の開始（再生割合）。
-## 打撃判定の開始（クリップの 44%）に合わせ、開始直後に届く押下
+## 打撃判定の開始（ジャブクリップの 29%）に合わせ、開始直後に届く押下
 ## （最初の押下のバウンスやパッドの二重イベント）を連鎖として拾わない。
-@export var chain_1_start_ratio: float = 0.45
+@export var chain_1_start_ratio: float = 0.30
 ## melee_1 の連鎖受付窓の終了（再生割合）。既定は melee_1_out_ratio と同じ。
-@export var chain_1_end_ratio: float = 0.90
+@export var chain_1_end_ratio: float = 0.85
 ## melee_2 中の連鎖受付窓の開始（打撃判定の開始 44% に合わせる）。
 @export var chain_2_start_ratio: float = 0.45
 ## melee_2 の連鎖受付窓の終了。既定は melee_2_out_ratio と同じ。
