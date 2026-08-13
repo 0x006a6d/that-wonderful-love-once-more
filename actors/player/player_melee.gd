@@ -1,21 +1,22 @@
 extends Node
 
-## プレイヤーのアニメーション制御。locomotion(idle/move ブレンド) → melee_1 → melee_2。
+## プレイヤーのアニメーション制御。
+## locomotion(idle/walk/run ブレンド) → melee_1(ジャブ) → melee_2(ストレート) → melee_3(フック)。
 ##
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
-## - locomotion: idle と move を BlendSpace1D（速度でブレンド）
-## - melee_1 / melee_2: 生成済み .res（Call Method Track 付き）
+## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
+## - melee_1..3: 生成済み .res（単発クリップ + Call Method Track 付き）
 ##
-## 入力の流れ:
-##   attack() が呼ばれる → locomotion なら melee_1 へ。
-##   melee_1 再生中に attack() が来たらバッファし、melee_1 終了で melee_2 へ連鎖。
-##   melee_2 終了、または melee_1 単発終了で locomotion に戻る。
+## 入力の流れ（1 押し 1 発）:
+##   attack() → locomotion なら melee_1。各段の連鎖受付窓内の再押下のみ次段を予約。
+##   予約が無ければその段で locomotion に戻る。melee_3 で打ち止め。
 ##
 ## ゲームロジック（player.gd）→ このノード（AnimationTree駆動）の一方向依存のみ。
 ## Call Method Track が叩く _enable_hitbox / _disable_hitbox は player.gd 側に置く。
 
 const MELEE_1_RES: String = "res://actors/player/anim/melee_1.res"
 const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
+const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
 
 ## VRM をインスタンス化した Model ノード。
 @export var model_path: NodePath = ^"../Model"
@@ -43,18 +44,24 @@ const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
 ## アニメ再生速度スケールのクランプ範囲（足の周期を実速度へ寄せる際の上下限）。
 @export var anim_speed_limits: Vector2 = Vector2(0.8, 1.8)
 
-@export_group("")
-## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 77% の直後。
-## クリップはパンチ区間だけに切り出し済みなので、ほぼ振り切ってから抜ける）。
-@export var melee_1_out_ratio: float = 0.85
-## melee_2 をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 81% の直後）。
+@export_group("Combo")
+## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 81% の直後）。
+@export var melee_1_out_ratio: float = 0.90
+## melee_2 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 81% の直後）。
 @export var melee_2_out_ratio: float = 0.90
+## melee_3 をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 89% の直後）。
+@export var melee_3_out_ratio: float = 0.95
 ## melee_1 中に連鎖入力（再押下）を受け付ける窓の開始（再生割合）。
-## 打撃判定の開始（クリップの 27%）に合わせ、開始直後に届く押下
+## 打撃判定の開始（クリップの 44%）に合わせ、開始直後に届く押下
 ## （最初の押下のバウンスやパッドの二重イベント）を連鎖として拾わない。
-@export var chain_window_start_ratio: float = 0.27
-## 連鎖受付窓の終了（再生割合）。既定は melee_1_out_ratio と同じ。
-@export var chain_window_end_ratio: float = 0.85
+@export var chain_1_start_ratio: float = 0.45
+## melee_1 の連鎖受付窓の終了（再生割合）。既定は melee_1_out_ratio と同じ。
+@export var chain_1_end_ratio: float = 0.90
+## melee_2 中の連鎖受付窓の開始（打撃判定の開始 44% に合わせる）。
+@export var chain_2_start_ratio: float = 0.45
+## melee_2 の連鎖受付窓の終了。既定は melee_2_out_ratio と同じ。
+@export var chain_2_end_ratio: float = 0.90
+@export_group("")
 
 signal combo_started()
 signal combo_finished()
@@ -96,14 +103,25 @@ func _physics_process(_delta: float) -> void:
 	if _state == "melee_1":
 		if _reached_ratio("melee_1", melee_1_out_ratio):
 			if _buffered:
-				_buffered = false
-				_state = "melee_2"
-				_state_machine.travel("melee_2")
+				_advance_to("melee_2")
 			else:
 				_finish_combo()
 	elif _state == "melee_2":
 		if _reached_ratio("melee_2", melee_2_out_ratio):
+			if _buffered:
+				_advance_to("melee_3")
+			else:
+				_finish_combo()
+	elif _state == "melee_3":
+		if _reached_ratio("melee_3", melee_3_out_ratio):
 			_finish_combo()
+
+
+## バッファを消費して次段へ進む。
+func _advance_to(next_state: String) -> void:
+	_buffered = false
+	_state = next_state
+	_state_machine.travel(next_state)
 
 
 ## 現在ステートのクリップが指定割合まで再生されたか。
@@ -145,8 +163,8 @@ func _anim_speed_scale(speed: float, blend: float) -> float:
 
 ## 攻撃入力（押下イベント 1 回につき 1 コール。押しっぱなしでは再コールされない）。
 ## - locomotion: melee_1 を開始する。この押下はここで消費され、連鎖には使われない
-## - melee_1 中: 連鎖受付窓（chain_window_*_ratio）内の「新たな押下」のみ melee_2 を予約
-## - melee_2 中・窓外: 無視（1 押し 1 発。2 段で打ち止め）
+## - melee_1 / melee_2 中: 各段の連鎖受付窓内の「新たな押下」のみ次段を予約
+## - melee_3 中・窓外: 無視（1 押し 1 発。3 段で打ち止め）
 func attack() -> void:
 	if _state_machine == null:
 		return
@@ -155,20 +173,22 @@ func attack() -> void:
 		_buffered = false
 		_state_machine.travel("melee_1")
 		combo_started.emit()
-	elif _state == "melee_1" and _in_chain_window():
+	elif _state == "melee_1" and _in_chain_window("melee_1", chain_1_start_ratio, chain_1_end_ratio):
+		_buffered = true
+	elif _state == "melee_2" and _in_chain_window("melee_2", chain_2_start_ratio, chain_2_end_ratio):
 		_buffered = true
 
 
-## melee_1 の連鎖受付窓の中か。travel 直後（まだ locomotion 側）や
+## 指定ステートの連鎖受付窓の中か。travel 直後（SM がまだ前ステート側）や
 ## 窓の前後に届いた押下は連鎖として扱わない。
-func _in_chain_window() -> bool:
-	if str(_state_machine.get_current_node()) != "melee_1":
+func _in_chain_window(state_name: String, start_ratio: float, end_ratio: float) -> bool:
+	if str(_state_machine.get_current_node()) != state_name:
 		return false
 	var length := _state_machine.get_current_length()
 	if length <= 0.0:
 		return false
 	var ratio := _state_machine.get_current_play_position() / length
-	return ratio >= chain_window_start_ratio and ratio <= chain_window_end_ratio
+	return ratio >= start_ratio and ratio <= end_ratio
 
 
 func is_attacking() -> bool:
@@ -210,11 +230,13 @@ func _build_library() -> bool:
 
 	var m1 := load(MELEE_1_RES) as Animation
 	var m2 := load(MELEE_2_RES) as Animation
-	if m1 == null or m2 == null:
+	var m3 := load(MELEE_3_RES) as Animation
+	if m1 == null or m2 == null or m3 == null:
 		push_warning("player_melee: melee .res load failed（build_melee_anims.gd を先に実行）")
 		return false
 	lib.add_animation("melee_1", m1)
 	lib.add_animation("melee_2", m2)
+	lib.add_animation("melee_3", m3)
 
 	if _anim_player.has_animation_library("player"):
 		_anim_player.remove_animation_library("player")
@@ -277,16 +299,21 @@ func _build_tree() -> void:
 	n_m1.animation = "player/melee_1"
 	var n_m2 := AnimationNodeAnimation.new()
 	n_m2.animation = "player/melee_2"
+	var n_m3 := AnimationNodeAnimation.new()
+	n_m3.animation = "player/melee_3"
 
 	sm.add_node("locomotion", loco, Vector2(0, 0))
 	sm.add_node("melee_1", n_m1, Vector2(300, 0))
 	sm.add_node("melee_2", n_m2, Vector2(600, 0))
+	sm.add_node("melee_3", n_m3, Vector2(900, 0))
 
 	# 全遷移をコード駆動（即時）にする。終端検出と分岐は _physics_process が握る。
 	_add_transition(sm, "locomotion", "melee_1", 0.08)
 	_add_transition(sm, "melee_1", "melee_2", 0.05)
+	_add_transition(sm, "melee_2", "melee_3", 0.05)
 	_add_transition(sm, "melee_1", "locomotion", 0.15)
 	_add_transition(sm, "melee_2", "locomotion", 0.20)
+	_add_transition(sm, "melee_3", "locomotion", 0.20)
 
 	_tree = AnimationTree.new()
 	_tree.name = "AnimationTree"

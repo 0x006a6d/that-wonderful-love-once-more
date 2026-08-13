@@ -6,16 +6,20 @@ extends SceneTree
 ## 複製 →「パンチ区間だけをキー単位で切り出し」→ 時間スケール → Hips XZ 除去 →
 ## Call Method Track 追加、の順で加工し res://actors/player/anim/*.res へ保存する。
 ##
-## 区間切り出しの根拠（tools/measure_reach_offline.gd の実測、Hips XZ 除去後の
-## 拳の前方到達）:
-##   Punch_Combo: 初段は到達 0.28m 止まりの小突き（見た目がもぞもぞの原因）。
-##     本命は 2 発目 0.73-1.06s（peak 0.501m @0.89s）→ trim [0.60, 1.20]s
-##   Cross_Punch: 0.43-0.89s は引き絞り（到達 -0.27m）、打撃は 0.92-1.25s
-##     （peak 0.629m @1.12s）→ trim [0.55, 1.45]s
+## 3段コンボ: 1押し目=左ジャブ / 2押し目=右ストレート / 3押し目=右フック。
 ##
-## 判定ウィンドウ（元クリップ等速の秒。trim・スケール後の時刻へ変換して埋め込む）:
-##   melee_1: enable 0.76 / disable 1.06（到達 0.25m 以上の区間）
-##   melee_2: enable 0.95 / disable 1.28（引き絞りには判定を出さない）
+## 教訓 (diag_punch_hands.gd の両手計測): Punch_Combo は L-R-L-R の4連フラリーで
+## 隣接振りの間隔が 0.2s しかなく、どの窓で切っても複数の振りが混入する
+## (旧 melee_1 に視覚上3発入っていた原因)。単発クリップのみを使うこと。
+## 使うクリップは必ず両手計測で「視覚上1発」を確認してから載せる。
+##
+## 区間切り出しの根拠 (両手計測、Hips XZ 除去後):
+##   Cross_Punch: 右 1 発のみ (R peak 0.626m @1.10s、L は全編ガード帯 0.35-0.40)
+##     → trim [0.55, 1.45]s。打撃 0.92-1.25s
+##   hook_4: 右フック 1 発 (R が x -0.31→+0.11 へ横断、xz peak 0.386m @0.75s。
+##     フック中の L は前方 0.35 以下)。左スイングが 0.95s から始まるため
+##     trim [0.45, 0.90]s で単発に切れる (diag_hook_lateral.gd)
+##   ※ melee_1 は左ジャブ素材 (mixamo_jab_left) が届くまで Cross_Punch を仮使用
 ##
 ## 使い方: godot --path . --headless --script tools/build_melee_anims.gd
 
@@ -24,10 +28,14 @@ const OUT_DIR: String = "res://actors/player/anim"
 # [出力名, ソース, アニメキー, trim_start, trim_end, speed, enable_t, disable_t, damage, knockback]
 # trim_* / enable_t / disable_t は元クリップ（等速）基準の秒。
 const CLIPS: Array = [
-	["melee_1", "res://assets/motions/mixamo_punch_combo.fbx", "mixamo_com",
-		0.60, 1.20, 1.3, 0.76, 1.06, 12.0, 4.0],
+	# 暫定: 左ジャブ素材待ち。届いたら mixamo_jab_left.fbx に差し替える。
+	["melee_1", "res://assets/motions/mixamo_cross_punch.fbx", "mixamo_com",
+		0.55, 1.45, 1.3, 0.95, 1.28, 10.0, 3.0],
 	["melee_2", "res://assets/motions/mixamo_cross_punch.fbx", "mixamo_com",
 		0.55, 1.45, 1.3, 0.95, 1.28, 20.0, 7.0],
+	# フックは重さを出すため速度スケールを控えめに (1.15)。
+	["melee_3", "res://assets/motions/mixamo_hook_4.fbx", "mixamo_com",
+		0.45, 0.90, 1.15, 0.65, 0.85, 26.0, 9.0],
 ]
 
 
