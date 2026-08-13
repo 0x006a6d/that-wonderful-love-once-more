@@ -13,6 +13,9 @@ assets/vrm/*.vrm
 # Mixamo (Adobe) 由来 FBX: 素材ファイル単体の再配布不可
 assets/motions/mixamo_*.fbx
 
+# 許諾記録はローカル管理、公開しない
+docs/permissions.md
+
 # OS
 Thumbs.db
 .DS_Store

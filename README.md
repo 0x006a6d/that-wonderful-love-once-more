@@ -33,7 +33,6 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 - `docs/technical-spec.md` — Godot 上の実装仕様
 - `docs/tasks.md` — コンテスト版（8/29 提出）の実装計画
 - `docs/tasks-full.md` — 提出後のフルスコープ版計画
-- `docs/permissions.md` — IP 許諾の記録
 
 ## 使用アセット
 
