@@ -549,15 +549,18 @@ func _on_deviation_changed(level: float) -> void:
 ## 15. 入力マップ
 
 **キーボード完結**（マウス割り当てなし。マウス対応は将来のオプション）。
+**PS5/PS4 コントローラー対応（DualSense / DualShock 4）**。Godot の joypad 抽象は
+Xbox ボタン名を使う（A=×, B=○, X=□, Y=△）ため、下表のパッド列は PS 表記で書く。
 
-| アクション                        | キーボード       |
-| ---------------------------- | ----------- |
-| `move_*`                     | WASD        |
-| `attack`                     | J           |
-| `dodge`                      | Space / K   |
-| `switch_mode`                | F           |
-| `lock_on`                    | Tab         |
-| `interact`                   | E           |
-| `camera_left` / `camera_right` | ← → / , .   |
+| アクション                        | キーボード       | パッド                  |
+| ---------------------------- | ----------- | -------------------- |
+| `move_*`                     | WASD        | 左スティック / 十字キー        |
+| `attack`                     | J           | □                    |
+| `dodge`                      | Space / K   | ×                    |
+| `switch_mode`                | F           | △                    |
+| `lock_on`                    | Tab         | R3（右スティック押し込み）       |
+| `interact`                   | E           | ○                    |
+| `camera_left` / `camera_right` | ← → / , .   | 右スティック横（倒し量→回転速度）    |
 
-銃モード用の `aim` / `reload` は未登録（8/24 の銃モード着手時に決める）。
+- 銃モード用の `aim` / `reload` は未登録（8/24 の銃モード着手時に決める）。**パッドの R2/L2 はそのために予約**しておき、他のアクションへ割り当てない
+- スティック系アクションのデッドゾーンは 0.2。カメラ側は追加で `orbit_deadzone`（`@export`）が効く
