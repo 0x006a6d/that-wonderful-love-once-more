@@ -46,6 +46,10 @@ func _ready() -> void:
 		"c":
 			_press_times = [1.0, 1.35, 1.70]
 			_end_time = 4.0
+		"d":
+			# 速い連打 (旧・受付窓方式でフックが出なかったテンポ)。
+			_press_times = [1.0, 1.15, 1.30]
+			_end_time = 4.0
 	for i in range(_press_times.size()):
 		_pressed.append(false)
 	_csv.append("frame,time,state,node,pos,hitbox_monitoring")

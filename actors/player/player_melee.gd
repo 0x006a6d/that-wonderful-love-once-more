@@ -53,18 +53,12 @@ const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
 @export var melee_2_out_ratio: float = 0.90
 ## melee_3（右フック）をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 89% の直後）。
 @export var melee_3_out_ratio: float = 0.95
-## melee_1 中に連鎖入力（再押下）を受け付ける窓の開始（再生割合）。
-## 打撃判定の開始（ジャブクリップの 29%）に合わせ、開始直後に届く押下
-## （最初の押下のバウンスやパッドの二重イベント）を連鎖として拾わない。
-@export var chain_1_start_ratio: float = 0.30
-## melee_1 の連鎖受付窓の終了（再生割合）。1.0 = 退出まで受け付ける。
-## out_ratio と同値にすると「振りの最終盤の押下」が退出との競合で握りつぶされ、
-## 連打中に入力が消える (c4 キャプチャの state CSV で実証)。
-@export var chain_1_end_ratio: float = 1.0
-## melee_2 中の連鎖受付窓の開始（打撃判定の開始 44% に合わせる）。
-@export var chain_2_start_ratio: float = 0.45
-## melee_2 の連鎖受付窓の終了。1.0 = 退出まで受け付ける (melee_1 と同じ理由)。
-@export var chain_2_end_ratio: float = 1.0
+## 押下のデバウンス（物理フレーム数）。この間隔未満で届いた連続押下は
+## 物理バウンス・パッドの二重イベントとして無視する（4f ≈ 66ms @60Hz）。
+## 実時間でなく物理フレーム基準なのは、headless/ムービー実行でも決定的にするため。
+## それ以外の押下は全て先行入力キューに積み、各段の終わりで消化する
+## （「受付窓」方式は窓外の押下が消え、連打テンポ次第でフックが出ない欠陥があった）。
+@export var press_debounce_frames: int = 4
 @export_group("")
 
 signal combo_started()
@@ -76,7 +70,12 @@ var _state_machine: AnimationNodeStateMachinePlayback = null
 var _model: Node3D = null
 
 var _state: String = "locomotion"
-var _buffered: bool = false
+## 先行入力キュー（残り段数を超えて積まない）。
+var _queued: int = 0
+var _last_press_frame: int = -1000
+
+## コンボの段が始まった（1=ジャブ, 2=ストレート, 3=フック）。踏み込み等の駆動用。
+signal stage_started(stage: int)
 
 
 func _ready() -> void:
@@ -106,14 +105,16 @@ func _physics_process(_delta: float) -> void:
 	# クリップ終端の検出は再生位置で行う（自動遷移に任せず、バッファ分岐をコードで握る）。
 	if _state == "melee_1":
 		if _reached_ratio("melee_1", melee_1_out_ratio):
-			if _buffered:
-				_advance_to("melee_2")
+			if _queued > 0:
+				_queued -= 1
+				_advance_to("melee_2", 2)
 			else:
 				_finish_combo()
 	elif _state == "melee_2":
 		if _reached_ratio("melee_2", melee_2_out_ratio):
-			if _buffered:
-				_advance_to("melee_3")
+			if _queued > 0:
+				_queued -= 1
+				_advance_to("melee_3", 3)
 			else:
 				_finish_combo()
 	elif _state == "melee_3":
@@ -121,11 +122,11 @@ func _physics_process(_delta: float) -> void:
 			_finish_combo()
 
 
-## バッファを消費して次段へ進む。
-func _advance_to(next_state: String) -> void:
-	_buffered = false
+## キューを消化して次段へ進む。
+func _advance_to(next_state: String, stage: int) -> void:
 	_state = next_state
 	_state_machine.travel(next_state)
+	stage_started.emit(stage)
 
 
 ## 現在ステートのクリップが指定割合まで再生されたか。
@@ -166,33 +167,28 @@ func _anim_speed_scale(speed: float, blend: float) -> float:
 
 
 ## 攻撃入力（押下イベント 1 回につき 1 コール。押しっぱなしでは再コールされない）。
-## - locomotion: melee_1 を開始する。この押下はここで消費され、連鎖には使われない
-## - melee_1 / melee_2 中: 各段の連鎖受付窓内の「新たな押下」のみ次段を予約
-## - melee_3 中・窓外: 無視（1 押し 1 発。3 段で打ち止め）
+## - デバウンス: 前回受理した押下から press_debounce_frames 未満の押下は
+##   物理バウンス/二重イベントとして無視（1 押し 1 発の保証）
+## - locomotion: melee_1 を開始。この押下はここで消費され、連鎖には使われない
+## - melee_1 / melee_2 中: 先行入力キューに積む（残り段数まで）。段の終わりで消化
+## - melee_3 中: 無視（3 段で打ち止め）
 func attack() -> void:
 	if _state_machine == null:
 		return
+	var now := Engine.get_physics_frames()
+	if now - _last_press_frame < press_debounce_frames:
+		return
+	_last_press_frame = now
 	if _state == "locomotion":
 		_state = "melee_1"
-		_buffered = false
+		_queued = 0
 		_state_machine.travel("melee_1")
 		combo_started.emit()
-	elif _state == "melee_1" and _in_chain_window("melee_1", chain_1_start_ratio, chain_1_end_ratio):
-		_buffered = true
-	elif _state == "melee_2" and _in_chain_window("melee_2", chain_2_start_ratio, chain_2_end_ratio):
-		_buffered = true
-
-
-## 指定ステートの連鎖受付窓の中か。travel 直後（SM がまだ前ステート側）や
-## 窓の前後に届いた押下は連鎖として扱わない。
-func _in_chain_window(state_name: String, start_ratio: float, end_ratio: float) -> bool:
-	if str(_state_machine.get_current_node()) != state_name:
-		return false
-	var length := _state_machine.get_current_length()
-	if length <= 0.0:
-		return false
-	var ratio := _state_machine.get_current_play_position() / length
-	return ratio >= start_ratio and ratio <= end_ratio
+		stage_started.emit(1)
+	elif _state == "melee_1":
+		_queued = mini(_queued + 1, 2)
+	elif _state == "melee_2":
+		_queued = mini(_queued + 1, 1)
 
 
 func is_attacking() -> bool:
@@ -201,7 +197,7 @@ func is_attacking() -> bool:
 
 func _finish_combo() -> void:
 	_state = "locomotion"
-	_buffered = false
+	_queued = 0
 	_state_machine.travel("locomotion")
 	combo_finished.emit()
 
