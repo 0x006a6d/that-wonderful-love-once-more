@@ -1,0 +1,33 @@
+[gd_scene load_steps=6 format=3 uid="uid://cplayr0nikeche01"]
+
+[ext_resource type="Script" path="res://actors/player/player.gd" id="1_player"]
+[ext_resource type="PackedScene" uid="uid://bs80ck7gp7cn8" path="res://assets/vrm/nikechan_v2.vrm" id="2_vrm"]
+[ext_resource type="Script" path="res://actors/player/player_camera.gd" id="3_camera"]
+[ext_resource type="Script" path="res://actors/player/player_idle_motion.gd" id="4_idle"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule_body"]
+radius = 0.3
+height = 1.6
+
+[node name="Player" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_player")
+
+[node name="Model" parent="." instance=ExtResource("2_vrm")]
+
+[node name="IdleMotion" type="Node" parent="."]
+script = ExtResource("4_idle")
+model_path = NodePath("../Model")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("Capsule_body")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+spring_length = 3.5
+script = ExtResource("3_camera")
+
+[node name="Camera3D" type="Camera3D" parent="SpringArm3D"]
+fov = 65.0
