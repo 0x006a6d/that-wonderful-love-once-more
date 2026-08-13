@@ -7,6 +7,12 @@ export_presets.cfg
 build/
 export/
 
+# 再配布不可アセット (ライセンス上リポジトリに含めない。tools/fetch_assets.sh と README の開発セットアップ参照)
+# VRM: 公式 IP 資産の再ホスティング回避
+assets/vrm/*.vrm
+# Mixamo (Adobe) 由来 FBX: 素材ファイル単体の再配布不可
+assets/motions/mixamo_*.fbx
+
 # OS
 Thumbs.db
 .DS_Store
