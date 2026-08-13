@@ -11,6 +11,7 @@ const VRM := "res://assets/vrm/nikechan_v2.vrm"
 const STEP := 0.05
 
 const SOURCES: Array = [
+	["jab_left", "res://assets/motions/mixamo_jab_left.fbx"],
 	["hook_1", "res://assets/motions/mixamo_hook_1.fbx"],
 	["hook_2", "res://assets/motions/mixamo_hook_2.fbx"],
 	["hook_3", "res://assets/motions/mixamo_hook_3.fbx"],

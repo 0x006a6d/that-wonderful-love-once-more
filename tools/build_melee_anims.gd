@@ -14,12 +14,13 @@ extends SceneTree
 ## 使うクリップは必ず両手計測で「視覚上1発」を確認してから載せる。
 ##
 ## 区間切り出しの根拠 (両手計測、Hips XZ 除去後):
+##   Lead Jab (mixamo_jab_left): 左 1 発のみ (L peak 0.497m @0.40s、右は全編ガード)。
+##     引き 0.15-0.25s → 伸展 0.30-0.45s → 0.60s でガード復帰 → trim [0.15, 0.60]s
 ##   Cross_Punch: 右 1 発のみ (R peak 0.626m @1.10s、L は全編ガード帯 0.35-0.40)
 ##     → trim [0.55, 1.45]s。打撃 0.92-1.25s
 ##   hook_4: 右フック 1 発 (R が x -0.31→+0.11 へ横断、xz peak 0.386m @0.75s。
 ##     フック中の L は前方 0.35 以下)。左スイングが 0.95s から始まるため
 ##     trim [0.45, 0.90]s で単発に切れる (diag_hook_lateral.gd)
-##   ※ melee_1 は左ジャブ素材 (mixamo_jab_left) が届くまで Cross_Punch を仮使用
 ##
 ## 使い方: godot --path . --headless --script tools/build_melee_anims.gd
 
@@ -28,9 +29,9 @@ const OUT_DIR: String = "res://actors/player/anim"
 # [出力名, ソース, アニメキー, trim_start, trim_end, speed, enable_t, disable_t, damage, knockback]
 # trim_* / enable_t / disable_t は元クリップ（等速）基準の秒。
 const CLIPS: Array = [
-	# 暫定: 左ジャブ素材待ち。届いたら mixamo_jab_left.fbx に差し替える。
-	["melee_1", "res://assets/motions/mixamo_cross_punch.fbx", "mixamo_com",
-		0.55, 1.45, 1.3, 0.95, 1.28, 10.0, 3.0],
+	# 左ジャブ。ジャブらしく速め (1.4x)。
+	["melee_1", "res://assets/motions/mixamo_jab_left.fbx", "mixamo_com",
+		0.15, 0.60, 1.4, 0.28, 0.48, 10.0, 3.0],
 	["melee_2", "res://assets/motions/mixamo_cross_punch.fbx", "mixamo_com",
 		0.55, 1.45, 1.3, 0.95, 1.28, 20.0, 7.0],
 	# フックは重さを出すため速度スケールを控えめに (1.15)。

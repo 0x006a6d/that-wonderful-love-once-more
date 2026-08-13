@@ -23,6 +23,7 @@ const SOURCES: Array = [
 	["melee_1.res (使用中)", "res", "res://actors/player/anim/melee_1.res", ""],
 	["melee_2.res (使用中)", "res", "res://actors/player/anim/melee_2.res", ""],
 	["melee_3.res (使用中)", "res", "res://actors/player/anim/melee_3.res", ""],
+	["jab_left 全長", "fbx", "res://assets/motions/mixamo_jab_left.fbx", "mixamo_com"],
 	["punch_combo 全長", "fbx", "res://assets/motions/mixamo_punch_combo.fbx", "mixamo_com"],
 	["cross_punch 全長", "fbx", "res://assets/motions/mixamo_cross_punch.fbx", "mixamo_com"],
 	["hook_1 全長", "fbx", "res://assets/motions/mixamo_hook_1.fbx", "mixamo_com"],
