@@ -31,6 +31,7 @@ res://
 │   └── bank_lobby.tscn
 ├── cutscenes/
 │   ├── opening_phone_video.tscn / .gd
+│   ├── ai_pov_intro.tscn / ai_pov_intro.gd   # 冒頭と警察突入で共用
 │   └── aftermath.tscn / aftermath.gd    # 冒頭とエンディングで共用
 ├── ui/
 │   ├── hud.tscn / hud.gd
@@ -391,6 +392,66 @@ OpeningPhoneVideo (Control)
 3. 携帯が叩き落とされる → カメラが床に転がり、傾いた画角で静止
 4. 映像は動かないまま音声のみ継続。怒鳴り声、悲鳴、続いて犯人の誰何と、何かがぶつかる音（**姿も声も提示しない。主人公は発話しない**）
 5. フェード → `aftermath.tscn`（`revealed = false`）へ
+
+## 12.5 AI視点イントロ（冒頭・突入で共用）
+
+`cutscenes/ai_pov_intro.tscn` / `ai_pov_intro.gd`
+
+彼女の視界を提示する導入演出（`game-design.md` §4.3）。**カットシーンを2本作らない。** `@export` のモードで冒頭と突入を切り替える。
+
+```gdscript
+# cutscenes/ai_pov_intro.gd
+enum Mode { OPENING, BREACH }
+@export var mode: int = Mode.OPENING
+```
+
+### 構成
+
+```
+AIPovIntro (Control)                    # フルスクリーン
+├── SubViewportContainer
+│   └── SubViewport
+│       └── BankLobbyScene インスタンス + PovCamera (Camera3D)   # 彼女の視点
+├── DetectionOverlay (Control)          # 人物検出枠。_draw() で緑矩形＋ラベル
+├── PovText (RichTextLabel)             # モノスペース、緑固定。タイプ表示
+└── ScanlineVignette (ColorRect, ShaderMaterial)   # 簡素な1枚
+```
+
+- `PovText` のタイプライター表示は、コード側でタイマーを持たず、**経過時間から表示文字数を算出**して `visible_characters` に代入する
+- `ScanlineVignette` はスキャンラインとビネットのみの簡素なシェーダー。スマホ動画の `phone_cam.gdshader` とは別物で、圧縮ノイズや色収差は持たない
+
+### シーケンス
+
+1. `PovText` にテキストをタイプ表示。**同時に** `DetectionOverlay` が人物枠を描き、各枠のラベルを「分類中…」から分類確定（対象: 武装／非武装 等）へ順次遷移させる。テキスト・検出枠・スキャンライン／ビネットの3点は同一画面の構成要素として並行して出す
+2. フェード
+3. 正面カメラの実3Dショットへ（`Marker3D` を参照して正面位置に置く）
+4. カメラを背後位置へ `Tween` で補間
+5. プレイヤーカメラへ制御を移譲し、HUD をフェードイン
+
+### 人物検出枠
+
+`DetectionOverlay` は、`Faction` を持つ各キャラノードを走査し、その AABB を `PovCamera.unproject_position()` でスクリーン座標へ投影して、Control 側で緑の矩形＋ラベルを描画する（`_draw()` か `NinePatchRect`）。**フレーム毎に更新する。**
+
+- 描画意匠はプレイ中のロックオンマーカー（§14）と揃え、連続性を持たせる
+- 分類ラベルは `Faction` と `RunState` から生成する。文言はハードコードで分散させず、下記のテキスト data 方式に含める
+- `BREACH` モードでは `RunState.police_threat_level()` に応じて警察向けラベルの文言を切り替える
+
+### テキストの生成
+
+表示テキストは data（`Array[String]` または関数）で持ち、ハードコードで分散させない。`BREACH` モードでは表示テキストの一部を `RunState` から生成する。
+
+```gdscript
+func _build_pov_lines() -> Array[String]:
+    var lines: Array[String] = []
+    match mode:
+        Mode.OPENING:
+            lines.append_array(_data_opening_lines())
+        Mode.BREACH:
+            lines.append("CIVILIAN CASUALTIES: %d" % RunState.civilians_downed)
+            lines.append("ENGAGEMENTS LOGGED: %d" % RunState.robbers_downed)
+            lines.append_array(_data_breach_lines(RunState.police_threat_level()))
+    return lines
+```
 
 ## 13. Aftermath シーン（冒頭とエンディングで共用）
 
