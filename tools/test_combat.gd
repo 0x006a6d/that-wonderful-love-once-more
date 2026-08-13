@@ -34,6 +34,8 @@ var _downed_after_first_hit: bool = false
 var _staggered_count: int = 0
 var _max_moved: float = 0.0
 var _reached_melee_2: bool = false
+var _key_attack_ok: bool = false
+var _key_deadline: int = 0
 var _frames: int = 0
 var _phase: int = 0
 
@@ -76,10 +78,29 @@ func _physics_process(_delta: float) -> void:
 		_dummy_start_pos = _dummy.global_position
 		_dummy_start_hp = float(_dummy_health.call("current_hp"))
 		print("[init] dummy hp=%.1f pos=%s" % [_dummy_start_hp, str(_dummy_start_pos)])
+		# 最初のコンボは attack アクション (キー J) のイベント経由で発火させ、
+		# 入力マップ→_unhandled_input→PlayerMelee の経路を検証する。
+		var ev := InputEventKey.new()
+		ev.physical_keycode = KEY_J
+		ev.pressed = true
+		Input.parse_input_event(ev)
+		_key_deadline = _frames + 15
 		_phase = 1
 		return
 
 	if _phase == 1:
+		# J キーイベントで攻撃が始まったか（15 フレーム以内）。
+		# 検証ウィンドウ中は直接 attack() を呼ばない（呼ぶと検証にならない）。
+		if not _key_attack_ok:
+			if bool(_melee.call("is_attacking")):
+				_key_attack_ok = true
+				var rel := InputEventKey.new()
+				rel.physical_keycode = KEY_J
+				rel.pressed = false
+				Input.parse_input_event(rel)
+			elif _frames < _key_deadline:
+				return
+			# deadline 超過: FAIL のまま直接駆動の grind に進む。
 		_max_moved = maxf(_max_moved, _dummy.global_position.distance_to(_dummy_start_pos))
 		var state := str(_melee.get("_state"))
 		if state == "melee_2":
@@ -116,6 +137,7 @@ func _evaluate() -> void:
 	print("[result] RunState.robbers_downed=%d  downed_records=%d" %
 		[RunState.robbers_downed, RunState.downed.size()])
 
+	_assert("attack アクション (キー J) でコンボが発火した", _key_attack_ok)
 	_assert("被弾で HP が減り staggered が発火した",
 		_hp_after_first_hit >= 0.0 and _hp_after_first_hit < _dummy_start_hp and _staggered_count >= 1)
 	_assert("1発ではダウンしない（初撃後は非ダウン）", not _downed_after_first_hit)

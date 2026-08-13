@@ -239,6 +239,12 @@ Player (CharacterBody3D)
 
 - `CharacterBody3D` + `move_and_slide()`
 - カメラは `SpringArm3D` の子。壁のめり込みは SpringArm が自動処理する
+- **操作はキーボード/パッド完結**。カメラは自動追従＋手動オービットの2層:
+    - 自動追従: 移動している間、ヨーを「移動方向の背後」へ緩やかに補間する。停止中は現在角を維持
+    - 手動オービット: `camera_left` / `camera_right` の押下中は入力強度で回転し、直後は自動追従を数秒抑制する（補間・回転速度・抑制時間は `@export`）
+    - ピッチは固定の見下ろし微角度（`@export`）。上下操作は持たない
+    - ロックオン実装後は「ロックオン中は対象を画面に収める」ヨー制御を最優先に挟む
+    - マウス操作対応は将来のオプション（現状の入力マップに含まれない）
 - 銃モード時は `SpringArm3D` の `position` を肩越しにオフセットし、`Camera3D.fov` を狭める。切り替えは `Tween` で 0.2 秒補間する
 
 ### 6.2 戦闘ステート
@@ -542,13 +548,16 @@ func _on_deviation_changed(level: float) -> void:
 
 ## 15. 入力マップ
 
-| アクション         | 既定          |
-| ------------- | ----------- |
-| `move_*`      | WASD        |
-| `attack`      | 左クリック       |
-| `aim`         | 右クリック長押し    |
-| `dodge`       | Space       |
-| `switch_mode` | Q           |
-| `lock_on`     | 中クリック / Tab |
-| `interact`    | E           |
-| `reload`      | R           |
+**キーボード完結**（マウス割り当てなし。マウス対応は将来のオプション）。
+
+| アクション                        | キーボード       |
+| ---------------------------- | ----------- |
+| `move_*`                     | WASD        |
+| `attack`                     | J           |
+| `dodge`                      | Space / K   |
+| `switch_mode`                | F           |
+| `lock_on`                    | Tab         |
+| `interact`                   | E           |
+| `camera_left` / `camera_right` | ← → / , .   |
+
+銃モード用の `aim` / `reload` は未登録（8/24 の銃モード着手時に決める）。

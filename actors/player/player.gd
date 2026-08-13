@@ -10,8 +10,6 @@ extends CharacterBody3D
 @export var move_speed: float = 4.5
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
-## マウス感度（player_camera.gd へ注入する）。
-@export var mouse_sensitivity: float = 0.003
 
 ## 命中時のヒットストップ時間（実時間・秒）。
 @export var hit_stop_duration: float = 0.09
@@ -39,10 +37,6 @@ func _ready() -> void:
 	_melee = get_node_or_null(melee_path)
 	_hitbox = get_node_or_null(hitbox_path) as Hitbox
 	_camera_shake = get_node_or_null(camera_shake_path)
-
-	var cam := _camera_rig as Node
-	if cam != null and cam.has_method("configure"):
-		cam.call("configure", mouse_sensitivity)
 
 	if _hitbox != null:
 		_hitbox.hit_landed.connect(_on_hit_landed)
@@ -77,13 +71,14 @@ func _physics_process(delta: float) -> void:
 		var planar := Vector2(velocity.x, velocity.z).length()
 		_melee.call("set_locomotion", planar)
 
+	# カメラの自動追従へ移動方向を注入する（攻撃中・停止中は ZERO）。
+	if _camera_rig != null and _camera_rig.has_method("set_move_direction"):
+		var cam_dir := Vector3.ZERO if attacking else direction
+		_camera_rig.call("set_move_direction", cam_dir)
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("attack"):
-		# マウス未キャプチャからの再キャプチャ用クリックを攻撃として拾わない
-		# （attack がマウスボタン由来のときのみ適用。キー入力は常に通す）。
-		if event is InputEventMouseButton and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-			return
 		if _melee != null:
 			_melee.call("attack")
 
