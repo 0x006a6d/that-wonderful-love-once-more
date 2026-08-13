@@ -18,9 +18,9 @@ extends CharacterBody3D
 ## 段が進むほど深く踏み込み、ノックバックした相手にフィニッシュが届くようにする。
 ## attack_brake で減衰するため「一歩踏み込んで止まる」挙動になる。
 @export var lunge_speeds: Vector3 = Vector3(1.5, 2.5, 3.5)
-## キック各段の踏み込み初速（m/s、x=前蹴り y=ひざ z=ハイキック）。
-## ひざは射程が短いため深めに踏み込む。
-@export var kick_lunge_speeds: Vector3 = Vector3(1.5, 3.0, 2.5)
+## キック各段の踏み込み初速（m/s、x=ひざ y=ミドル z=サイドキック）。
+## 初段のひざは射程が短いため深めに踏み込む。
+@export var kick_lunge_speeds: Vector3 = Vector3(3.0, 2.0, 2.0)
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 

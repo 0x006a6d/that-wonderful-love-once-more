@@ -66,6 +66,16 @@ func _ready() -> void:
 			_key = KEY_K
 			_press_times = [1.0, 1.15, 1.30]
 			_end_time = 4.5
+		"k1b":
+			# 新構成 (膝→ミドル→サイド) のキック単発。
+			_key = KEY_K
+			_press_times = [1.0]
+			_end_time = 3.5
+		"k3b":
+			# 新構成のキック3連 (0.35s 間隔)。
+			_key = KEY_K
+			_press_times = [1.0, 1.35, 1.70]
+			_end_time = 4.5
 	for i in range(_press_times.size()):
 		_pressed.append(false)
 	_csv.append("frame,time,state,node,pos,hitbox_monitoring")

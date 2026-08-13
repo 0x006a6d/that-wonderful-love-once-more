@@ -17,6 +17,7 @@ const SOURCES: Array = [
 	["knee (Illegal Knee)", "res://assets/motions/mixamo_knee.fbx"],
 	["kick_finish (Kicking)", "res://assets/motions/mixamo_kick_finish.fbx"],
 	["knee_jab (Knee Jab)", "res://assets/motions/mixamo_knee_jab.fbx"],
+	["kick_side (Side Kick)", "res://assets/motions/mixamo_kick_side.fbx"],
 ]
 
 
