@@ -8,6 +8,12 @@ extends CharacterBody3D
 
 ## 平地移動速度（m/s）。身長160cm 基準の等身に合わせた既定値。
 @export var move_speed: float = 4.5
+## 加速度（m/s²）。一歩目がわずかに遅れることで質量感を出す。
+@export var accel: float = 10.0
+## 減速度（m/s²）。入力を離してもピタッと止まらず短い減速を挟む。
+@export var decel: float = 14.0
+## 攻撃開始時のブレーキ（m/s²）。移動慣性を踏み込み一歩ぶんだけ残して殺す。
+@export var attack_brake: float = 30.0
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 
@@ -48,17 +54,19 @@ func _physics_process(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := _camera_relative_direction(input_dir)
 
+	# 速度は目標値へ加減速で寄せる（即時切替をやめて慣性＝質量感を出す）。
+	var horizontal := Vector2(velocity.x, velocity.z)
 	if attacking:
-		# 攻撃中は移動入力を無視してルートを固定する。
-		velocity.x = 0.0
-		velocity.z = 0.0
+		# 攻撃中は移動入力を無視し、強めのブレーキで踏み込み一歩ぶんだけ滑って止まる。
+		horizontal = horizontal.move_toward(Vector2.ZERO, attack_brake * delta)
 	elif direction.length() > 0.001:
-		velocity.x = direction.x * move_speed
-		velocity.z = direction.z * move_speed
+		var target := Vector2(direction.x, direction.z) * move_speed
+		horizontal = horizontal.move_toward(target, accel * delta)
 		_face_direction(direction, delta)
 	else:
-		velocity.x = 0.0
-		velocity.z = 0.0
+		horizontal = horizontal.move_toward(Vector2.ZERO, decel * delta)
+	velocity.x = horizontal.x
+	velocity.z = horizontal.y
 
 	if not is_on_floor():
 		velocity.y += get_gravity().y * delta
