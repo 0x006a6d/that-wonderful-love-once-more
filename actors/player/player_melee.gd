@@ -1,7 +1,9 @@
 extends Node
 
 ## プレイヤーのアニメーション制御。
-## locomotion(idle/walk/run ブレンド) → melee_1(ジャブ) → melee_2(ストレート) → melee_3(フック)。
+## locomotion(idle/walk/run ブレンド) から2系統の独立3段コンボ:
+##   パンチ: melee_1(左ジャブ) → melee_2(右ストレート) → melee_3(左フック)
+##   キック: kick_1(右前蹴り) → kick_2(右ひざ) → kick_3(右ハイキック)
 ##
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
 ## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
@@ -17,6 +19,9 @@ extends Node
 const MELEE_1_RES: String = "res://actors/player/anim/melee_1.res"
 const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
 const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
+const KICK_1_RES: String = "res://actors/player/anim/kick_1.res"
+const KICK_2_RES: String = "res://actors/player/anim/kick_2.res"
+const KICK_3_RES: String = "res://actors/player/anim/kick_3.res"
 
 ## VRM をインスタンス化した Model ノード。
 @export var model_path: NodePath = ^"../Model"
@@ -53,6 +58,12 @@ const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
 @export var melee_2_out_ratio: float = 0.90
 ## melee_3（右フック）をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 89% の直後）。
 @export var melee_3_out_ratio: float = 0.95
+## kick_1（右前蹴り）の抜け割合（判定窓の終了 80% の直後）。
+@export var kick_1_out_ratio: float = 0.90
+## kick_2（右ひざ）の抜け割合（判定窓の終了 74% の直後）。
+@export var kick_2_out_ratio: float = 0.85
+## kick_3（右ハイキック、フィニッシュ）の抜け割合（判定窓の終了 85% の直後）。
+@export var kick_3_out_ratio: float = 0.95
 ## 押下のデバウンス（物理フレーム数）。この間隔未満で届いた連続押下は
 ## 物理バウンス・パッドの二重イベントとして無視する（4f ≈ 66ms @60Hz）。
 ## 実時間でなく物理フレーム基準なのは、headless/ムービー実行でも決定的にするため。
@@ -70,12 +81,14 @@ var _state_machine: AnimationNodeStateMachinePlayback = null
 var _model: Node3D = null
 
 var _state: String = "locomotion"
-## 先行入力キュー（残り段数を超えて積まない）。
+## 先行入力キュー（残り段数を超えて積まない）。パンチ・キックで共用
+## （同時には一方のコンボしか走らないため）。
 var _queued: int = 0
 var _last_press_frame: int = -1000
+var _last_kick_frame: int = -1000
 
-## コンボの段が始まった（1=ジャブ, 2=ストレート, 3=フック）。踏み込み等の駆動用。
-signal stage_started(stage: int)
+## コンボの段が始まった（kind: "punch"/"kick"、stage: 1..3）。踏み込み等の駆動用。
+signal stage_started(kind: StringName, stage: int)
 
 
 func _ready() -> void:
@@ -107,26 +120,43 @@ func _physics_process(_delta: float) -> void:
 		if _reached_ratio("melee_1", melee_1_out_ratio):
 			if _queued > 0:
 				_queued -= 1
-				_advance_to("melee_2", 2)
+				_advance_to("melee_2", &"punch", 2)
 			else:
 				_finish_combo()
 	elif _state == "melee_2":
 		if _reached_ratio("melee_2", melee_2_out_ratio):
 			if _queued > 0:
 				_queued -= 1
-				_advance_to("melee_3", 3)
+				_advance_to("melee_3", &"punch", 3)
 			else:
 				_finish_combo()
 	elif _state == "melee_3":
 		if _reached_ratio("melee_3", melee_3_out_ratio):
 			_finish_combo()
+	elif _state == "kick_1":
+		if _reached_ratio("kick_1", kick_1_out_ratio):
+			if _queued > 0:
+				_queued -= 1
+				_advance_to("kick_2", &"kick", 2)
+			else:
+				_finish_combo()
+	elif _state == "kick_2":
+		if _reached_ratio("kick_2", kick_2_out_ratio):
+			if _queued > 0:
+				_queued -= 1
+				_advance_to("kick_3", &"kick", 3)
+			else:
+				_finish_combo()
+	elif _state == "kick_3":
+		if _reached_ratio("kick_3", kick_3_out_ratio):
+			_finish_combo()
 
 
 ## キューを消化して次段へ進む。
-func _advance_to(next_state: String, stage: int) -> void:
+func _advance_to(next_state: String, kind: StringName, stage: int) -> void:
 	_state = next_state
 	_state_machine.travel(next_state)
-	stage_started.emit(stage)
+	stage_started.emit(kind, stage)
 
 
 ## 現在ステートのクリップが指定割合まで再生されたか。
@@ -184,10 +214,32 @@ func attack() -> void:
 		_queued = 0
 		_state_machine.travel("melee_1")
 		combo_started.emit()
-		stage_started.emit(1)
+		stage_started.emit(&"punch", 1)
 	elif _state == "melee_1":
 		_queued = mini(_queued + 1, 2)
 	elif _state == "melee_2":
+		_queued = mini(_queued + 1, 1)
+	# キックコンボ中のパンチ入力は無視（混合コンボは将来対応）。
+
+
+## キック入力。attack() と同じキュー/デバウンス方式の独立3段。
+## パンチコンボ中のキック入力・キックコンボ中のパンチ入力は互いに無視する。
+func kick() -> void:
+	if _state_machine == null:
+		return
+	var now := Engine.get_physics_frames()
+	if now - _last_kick_frame < press_debounce_frames:
+		return
+	_last_kick_frame = now
+	if _state == "locomotion":
+		_state = "kick_1"
+		_queued = 0
+		_state_machine.travel("kick_1")
+		combo_started.emit()
+		stage_started.emit(&"kick", 1)
+	elif _state == "kick_1":
+		_queued = mini(_queued + 1, 2)
+	elif _state == "kick_2":
 		_queued = mini(_queued + 1, 1)
 
 
@@ -231,12 +283,18 @@ func _build_library() -> bool:
 	var m1 := load(MELEE_1_RES) as Animation
 	var m2 := load(MELEE_2_RES) as Animation
 	var m3 := load(MELEE_3_RES) as Animation
-	if m1 == null or m2 == null or m3 == null:
-		push_warning("player_melee: melee .res load failed（build_melee_anims.gd を先に実行）")
+	var k1 := load(KICK_1_RES) as Animation
+	var k2 := load(KICK_2_RES) as Animation
+	var k3 := load(KICK_3_RES) as Animation
+	if m1 == null or m2 == null or m3 == null or k1 == null or k2 == null or k3 == null:
+		push_warning("player_melee: melee/kick .res load failed（build_melee_anims.gd を先に実行）")
 		return false
 	lib.add_animation("melee_1", m1)
 	lib.add_animation("melee_2", m2)
 	lib.add_animation("melee_3", m3)
+	lib.add_animation("kick_1", k1)
+	lib.add_animation("kick_2", k2)
+	lib.add_animation("kick_3", k3)
 
 	if _anim_player.has_animation_library("player"):
 		_anim_player.remove_animation_library("player")
@@ -301,11 +359,20 @@ func _build_tree() -> void:
 	n_m2.animation = "player/melee_2"
 	var n_m3 := AnimationNodeAnimation.new()
 	n_m3.animation = "player/melee_3"
+	var n_k1 := AnimationNodeAnimation.new()
+	n_k1.animation = "player/kick_1"
+	var n_k2 := AnimationNodeAnimation.new()
+	n_k2.animation = "player/kick_2"
+	var n_k3 := AnimationNodeAnimation.new()
+	n_k3.animation = "player/kick_3"
 
 	sm.add_node("locomotion", loco, Vector2(0, 0))
 	sm.add_node("melee_1", n_m1, Vector2(300, 0))
 	sm.add_node("melee_2", n_m2, Vector2(600, 0))
 	sm.add_node("melee_3", n_m3, Vector2(900, 0))
+	sm.add_node("kick_1", n_k1, Vector2(300, 150))
+	sm.add_node("kick_2", n_k2, Vector2(600, 150))
+	sm.add_node("kick_3", n_k3, Vector2(900, 150))
 
 	# 全遷移をコード駆動（即時）にする。終端検出と分岐は _physics_process が握る。
 	_add_transition(sm, "locomotion", "melee_1", 0.08)
@@ -314,6 +381,12 @@ func _build_tree() -> void:
 	_add_transition(sm, "melee_1", "locomotion", 0.15)
 	_add_transition(sm, "melee_2", "locomotion", 0.20)
 	_add_transition(sm, "melee_3", "locomotion", 0.20)
+	_add_transition(sm, "locomotion", "kick_1", 0.08)
+	_add_transition(sm, "kick_1", "kick_2", 0.05)
+	_add_transition(sm, "kick_2", "kick_3", 0.05)
+	_add_transition(sm, "kick_1", "locomotion", 0.15)
+	_add_transition(sm, "kick_2", "locomotion", 0.20)
+	_add_transition(sm, "kick_3", "locomotion", 0.20)
 
 	_tree = AnimationTree.new()
 	_tree.name = "AnimationTree"
