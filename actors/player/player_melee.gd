@@ -14,16 +14,19 @@ extends Node
 ## ゲームロジック（player.gd）→ このノード（AnimationTree駆動）の一方向依存のみ。
 ## Call Method Track が叩く _enable_hitbox / _disable_hitbox は player.gd 側に置く。
 
-const IDLE_MOTION: String = "res://assets/motions/mixamo_boxing_idle.fbx"
-const MOVE_MOTION: String = "res://assets/motions/universal_animation_library.gltf"
-const MOVE_KEY: String = "Jog_Fwd_Loop"
+## Quaternius universal ライブラリ。glTF インポータが "_Loop" サフィックスを
+## 剥がして loop フラグへ変換するため、実アニメ名は "Idle" / "Walk" / "Jog_Fwd"。
+const UNIV_MOTION: String = "res://assets/motions/universal_animation_library.gltf"
+const IDLE_KEY: String = "Idle"
+const WALK_KEY: String = "Walk"
+const JOG_KEY: String = "Jog_Fwd"
 const MELEE_1_RES: String = "res://actors/player/anim/melee_1.res"
 const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
 
 ## VRM をインスタンス化した Model ノード。
 @export var model_path: NodePath = ^"../Model"
-## locomotion で move とみなす速度（m/s）。
-@export var move_speed_threshold: float = 0.3
+## locomotion ブレンドの基準速度（この速度で blend=1.0=ジョグ）。
+@export var locomotion_max_speed: float = 4.5
 ## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓を過ぎたら素早く戻す）。
 @export var melee_1_out_ratio: float = 0.55
 ## melee_2 をこの再生割合まで進めたら待機へ抜ける。
@@ -88,11 +91,11 @@ func _reached_ratio(state_name: String, ratio: float) -> bool:
 	return length > 0.0 and pos >= length * ratio
 
 
-## player.gd の locomotion 更新。攻撃中でなければ move/idle をブレンド。
+## player.gd の locomotion 更新。速度に応じて idle(0)→walk(0.5)→jog(1.0) をブレンド。
 func set_locomotion(speed: float) -> void:
 	if _tree == null:
 		return
-	var blend := 1.0 if speed > move_speed_threshold else 0.0
+	var blend := clampf(speed / locomotion_max_speed, 0.0, 1.0)
 	_tree.set("parameters/locomotion/blend_position", blend)
 
 
@@ -123,20 +126,28 @@ func _finish_combo() -> void:
 func _build_library() -> bool:
 	var lib := AnimationLibrary.new()
 
-	var idle := _extract(IDLE_MOTION, "")
+	var idle := _extract(UNIV_MOTION, IDLE_KEY)
 	if idle == null:
-		push_warning("player_melee: idle load failed")
+		push_warning("player_melee: idle (%s) load failed" % IDLE_KEY)
 		return false
 	idle.loop_mode = Animation.LOOP_LINEAR
 	lib.add_animation("idle", idle)
 
-	var move := _extract(MOVE_MOTION, MOVE_KEY)
-	if move != null:
-		move.loop_mode = Animation.LOOP_LINEAR
-		lib.add_animation("move", move)
+	var walk := _extract(UNIV_MOTION, WALK_KEY)
+	if walk != null:
+		walk.loop_mode = Animation.LOOP_LINEAR
+		lib.add_animation("walk", walk)
 	else:
-		# 移動モーションが取れなくても idle で代用（コンボ検証を止めない）。
-		lib.add_animation("move", idle.duplicate(true) as Animation)
+		push_warning("player_melee: walk (%s) load failed。idle で代用" % WALK_KEY)
+		lib.add_animation("walk", idle.duplicate(true) as Animation)
+
+	var jog := _extract(UNIV_MOTION, JOG_KEY)
+	if jog != null:
+		jog.loop_mode = Animation.LOOP_LINEAR
+		lib.add_animation("jog", jog)
+	else:
+		push_warning("player_melee: jog (%s) load failed。idle で代用" % JOG_KEY)
+		lib.add_animation("jog", idle.duplicate(true) as Animation)
 
 	var m1 := load(MELEE_1_RES) as Animation
 	var m2 := load(MELEE_2_RES) as Animation
@@ -152,7 +163,8 @@ func _build_library() -> bool:
 	return true
 
 
-## FBX/gltf から 1 本の Animation を取り出す。key が空なら最初の非 RESET を拾う。
+## FBX/gltf から 1 本の Animation を取り出す。見つからなければ null
+## （以前の「先頭クリップへのフォールバック」は A_TPose を拾う事故の原因だったため廃止）。
 func _extract(scene_path: String, key: String) -> Animation:
 	var packed := load(scene_path) as PackedScene
 	if packed == null:
@@ -163,17 +175,12 @@ func _extract(scene_path: String, key: String) -> Animation:
 		inst.free()
 		return null
 	var result: Animation = null
-	if not key.is_empty() and src.has_animation(key):
+	if src.has_animation(key):
 		result = src.get_animation(key).duplicate(true) as Animation
-	elif not key.is_empty():
-		# ライブラリ接頭辞付きで探す。
+	else:
+		# ライブラリ接頭辞付き（"lib/Key"）で探す。
 		for a in src.get_animation_list():
-			if str(a).ends_with(key):
-				result = src.get_animation(a).duplicate(true) as Animation
-				break
-	if result == null:
-		for a in src.get_animation_list():
-			if str(a) != "RESET":
+			if str(a).ends_with("/" + key):
 				result = src.get_animation(a).duplicate(true) as Animation
 				break
 	inst.free()
@@ -183,18 +190,22 @@ func _extract(scene_path: String, key: String) -> Animation:
 func _build_tree() -> void:
 	var sm := AnimationNodeStateMachine.new()
 
-	# locomotion: idle(0.0) / move(1.0) の BlendSpace1D
+	# locomotion: idle(0.0) / walk(0.5) / jog(1.0) の BlendSpace1D（速度でブレンド）
 	var blend := AnimationNodeBlendSpace1D.new()
 	blend.min_space = 0.0
 	blend.max_space = 1.0
 	var n_idle := AnimationNodeAnimation.new()
 	n_idle.animation = "player/idle"
 	n_idle.resource_name = "idle"
-	var n_move := AnimationNodeAnimation.new()
-	n_move.animation = "player/move"
-	n_move.resource_name = "move"
+	var n_walk := AnimationNodeAnimation.new()
+	n_walk.animation = "player/walk"
+	n_walk.resource_name = "walk"
+	var n_jog := AnimationNodeAnimation.new()
+	n_jog.animation = "player/jog"
+	n_jog.resource_name = "jog"
 	blend.add_blend_point(n_idle, 0.0, -1)
-	blend.add_blend_point(n_move, 1.0, -1)
+	blend.add_blend_point(n_walk, 0.5, -1)
+	blend.add_blend_point(n_jog, 1.0, -1)
 
 	var n_m1 := AnimationNodeAnimation.new()
 	n_m1.animation = "player/melee_1"

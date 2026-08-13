@@ -80,6 +80,10 @@ func _physics_process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("attack"):
+		# マウス未キャプチャからの再キャプチャ用クリックを攻撃として拾わない
+		# （attack がマウスボタン由来のときのみ適用。キー入力は常に通す）。
+		if event is InputEventMouseButton and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+			return
 		if _melee != null:
 			_melee.call("attack")
 
