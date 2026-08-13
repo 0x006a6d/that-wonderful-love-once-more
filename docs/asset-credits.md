@@ -21,12 +21,13 @@
 
 ## モーション: Mixamo モーション一式 (Adobe Mixamo)
 
-- ファイル: `assets/motions/mixamo_*.fbx` (計 29 本)
+- ファイル: `assets/motions/mixamo_*.fbx` (計 33 本)
   - パンチ (10): `mixamo_cross_punch` / `mixamo_combo_punch` / `mixamo_punch_combo` / `mixamo_hook_1..4` / `mixamo_elbow_1..3`
   - キック (3): `mixamo_kick_chapa` (Chapa-Giratoria) / `mixamo_kick_martelo` (Martelo 2) / `mixamo_kick_standing` (Standing Melee Kick)
   - 構え (1): `mixamo_boxing_idle` (Boxing)
   - 被弾リアクション (4): `mixamo_hit_react_1` (Hit Reaction) / `mixamo_hit_react_large_front` / `mixamo_hit_react_large_right` / `mixamo_hit_react_small` (Standing React Large From Front/Right, Small From Right)
   - 回避・移動 (4): `mixamo_dodge_backward` (Standing Dodge Backward) / `mixamo_dive_roll` (Running Dive Roll) / `mixamo_backslide` (Sprint To Backslide) / `mixamo_fall_land_idle` (Fall B Land To Standing Idle)
+  - 歩行・走行 (4): `mixamo_walk` (Walking) / `mixamo_run` (Running) / `mixamo_walk_female` (Female Walk。逸脱時の歩行差し替え候補) / `mixamo_walk_catwalk` (Catwalk Walk Forward。同候補)
   - 銃 (1): `mixamo_rifle_fire` (Firing Rifle)
   - ダウン (6): `mixamo_death_dying` (Dying) / `mixamo_death_front_01` (Death From The Front) / `mixamo_death_back_01` (Death From Back Headshot。元名がプロジェクト制約に触れるため中立名で配置) / `mixamo_death_backward_01` / `mixamo_death_forward_01` / `mixamo_death_left_01` (Standing Death Backward/Forward/Left 01)
 ### ファイル名 ↔ Mixamo 検索名 対応表
@@ -57,6 +58,10 @@ Mixamo で各モーションを検索・ダウンロードする際の検索名�
 | Running Dive Roll | `mixamo_dive_roll.fbx` |
 | Sprint To Backslide | `mixamo_backslide.fbx` |
 | Fall B Land To Standing Idle | `mixamo_fall_land_idle.fbx` |
+| Walking | `mixamo_walk.fbx` |
+| Running | `mixamo_run.fbx` |
+| Female Walk | `mixamo_walk_female.fbx` |
+| Catwalk Walk Forward | `mixamo_walk_catwalk.fbx` |
 | Firing Rifle | `mixamo_rifle_fire.fbx` |
 | Dying | `mixamo_death_dying.fbx` |
 | Death From The Front | `mixamo_death_front_01.fbx` |
