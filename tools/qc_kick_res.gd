@@ -8,7 +8,7 @@ extends SceneTree
 ##
 ## 実行: godot --path . --headless --script res://tools/qc_kick_res.gd
 
-const VRM := "res://assets/vrm/nikechan_v2.vrm"
+const VRM := "res://assets/vrm/nikechan_player.vrm"
 const FPS := 60.0
 
 # [名前, パス, 蹴り足 ("L"/"R"), 指標 ("foot_planar"|"knee_y"), 振り閾値 m]

@@ -7,7 +7,7 @@ extends SceneTree
 ##
 ## 実行: godot --path . --headless --script res://tools/diag_hook_lateral.gd
 
-const VRM := "res://assets/vrm/nikechan_v2.vrm"
+const VRM := "res://assets/vrm/nikechan_player.vrm"
 const STEP := 0.05
 
 const SOURCES: Array = [

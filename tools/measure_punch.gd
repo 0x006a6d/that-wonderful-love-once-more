@@ -14,7 +14,7 @@ extends SceneTree
 # 対象アニメは ANIMS 配列で指定。
 
 const MOTION_SCENE: String = "res://assets/motions/universal_animation_library.gltf"
-const VRM_SCENE: String = "res://assets/vrm/nikechan_v2.vrm"
+const VRM_SCENE: String = "res://assets/vrm/nikechan_player.vrm"
 const ANIMS: Array[String] = ["Punch_Cross", "Punch_Jab", "Punch_Enter"]
 const SAMPLE_STEP: float = 0.1
 

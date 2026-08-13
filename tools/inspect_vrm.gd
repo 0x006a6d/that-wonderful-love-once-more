@@ -21,7 +21,7 @@ func _find(node: Node, cls: String) -> Node:
 
 
 func _init() -> void:
-	var packed: PackedScene = load("res://assets/vrm/nikechan_v2.vrm") as PackedScene
+	var packed: PackedScene = load("res://assets/vrm/nikechan_player.vrm") as PackedScene
 	var inst: Node = packed.instantiate()
 	print("=== VRM scene tree ===")
 	_walk(inst, 0)

@@ -20,7 +20,7 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
    tools/fetch_assets.sh
    ```
 
-   AIニケちゃん公式リポジトリから `nikechan_v2.vrm` を `assets/vrm/` へダウンロードする（既にあればスキップ）。
+   AIニケちゃん公式リポジトリの VRM を `assets/vrm/nikechan_player.vrm` としてダウンロードする（既にあればスキップ）。プロジェクトは主人公モデルをこの固定名で参照する。
 
 2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で `docs/asset-credits.md` の対応表にある各モーションを検索し、**FBX for Unity / Without Skin**（メッシュ非同梱）でダウンロードして、対応表の `mixamo_*.fbx` 名にリネームし `assets/motions/` へ配置する（計 29 本）。ファイル名と検索名の対応は同ドキュメントの表を参照。
 

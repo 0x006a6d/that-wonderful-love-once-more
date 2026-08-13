@@ -14,7 +14,7 @@ extends SceneTree
 ##
 ## 実行: godot --path . --headless --script res://tools/diag_punch_hands.gd
 
-const VRM := "res://assets/vrm/nikechan_v2.vrm"
+const VRM := "res://assets/vrm/nikechan_player.vrm"
 const STEP := 0.05
 const PEAK_MIN := 0.40
 
