@@ -99,12 +99,12 @@
 
 **この日が作品の生死を分ける。**
 
-- [ ] `health.gd` / `hitbox.gd` / `hurtbox.gd`
-- [ ] 近接コンボ2段（3段は余裕があれば）
-- [ ] 判定は `AnimationPlayer` の Call Method Track で ON/OFF
-- [ ] `AnimationTree` のステートマシン構築
-- [ ] 棒立ちのダミーを配置して殴れるようにする
-- [ ] ヒットストップ、カメラシェイク、ノックバック
+- [x] `health.gd` / `hitbox.gd` / `hurtbox.gd`
+- [x] 近接コンボ2段（3段は余裕があれば）
+- [x] 判定は `AnimationPlayer` の Call Method Track で ON/OFF
+- [x] `AnimationTree` のステートマシン構築
+- [x] 棒立ちのダミーを配置して殴れるようにする
+- [x] ヒットストップ、カメラシェイク、ノックバック
 
 **受け入れ条件**
 
