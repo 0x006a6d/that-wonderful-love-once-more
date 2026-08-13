@@ -20,7 +20,8 @@ func _init() -> void:
 	_check("move_left", [KEY_A], [JOY_BUTTON_DPAD_LEFT], [[JOY_AXIS_LEFT_X, -1]])
 	_check("move_right", [KEY_D], [JOY_BUTTON_DPAD_RIGHT], [[JOY_AXIS_LEFT_X, 1]])
 	_check("attack", [KEY_J], [JOY_BUTTON_X], [])              # □
-	_check("dodge", [KEY_SPACE, KEY_K], [JOY_BUTTON_A], [])    # ×
+	_check("dodge", [KEY_SPACE], [JOY_BUTTON_RIGHT_SHOULDER], [])  # R1
+	_check("kick", [KEY_K], [JOY_BUTTON_A], [])                # ×
 	_check("switch_mode", [KEY_F], [JOY_BUTTON_Y], [])         # △
 	_check("lock_on", [KEY_TAB], [JOY_BUTTON_RIGHT_STICK], []) # R3
 	_check("interact", [KEY_E], [JOY_BUTTON_B], [])            # ○

@@ -11,6 +11,7 @@ extends Node
 ##   (3) コンボが melee_2 まで連鎖する
 ##   (4) 連打で HP が尽きるとダウンする（1発ではダウンしない）
 ##   (5) RunState に robber ダウンが記録される
+##   (6) キックコンボでも命中し Dummy2 がダウンする（キック hitbox の実効確認）
 ##
 ## ノックバックでダミーが射程外へ押し出されるため、攻撃の合間に
 ## プレイヤーをダミーの手前 1m へ寄せ直す（歩き寄りの代替）。
@@ -26,6 +27,8 @@ var _player: Node3D = null
 var _melee: Node = null
 var _dummy: Node3D = null
 var _dummy_health: Node = null
+var _dummy2: Node3D = null
+var _dummy2_health: Node = null
 
 var _dummy_start_pos: Vector3 = Vector3.ZERO
 var _dummy_start_hp: float = 0.0
@@ -56,7 +59,9 @@ func _ready() -> void:
 		return
 	_melee = _player.get_node_or_null("PlayerMelee")
 	_dummy_health = _dummy.get_node_or_null("Health")
-	if _melee == null or _dummy_health == null:
+	_dummy2 = _stage.get_node_or_null("Dummy2") as Node3D
+	_dummy2_health = _dummy2.get_node_or_null("Health") if _dummy2 != null else null
+	if _melee == null or _dummy_health == null or _dummy2_health == null:
 		_fatal("PlayerMelee / Health が見つからない")
 		return
 	_dummy_health.connect("staggered", _on_staggered)
@@ -108,7 +113,7 @@ func _physics_process(_delta: float) -> void:
 
 		var downed: bool = bool(_dummy_health.call("is_downed"))
 		if downed:
-			_evaluate()
+			_phase = 2
 			return
 		if _frames >= MAX_FRAMES:
 			print("[timeout] frames=%d" % _frames)
@@ -124,6 +129,26 @@ func _physics_process(_delta: float) -> void:
 			_melee.call("attack")
 		elif state == "melee_1":
 			_melee.call("attack")  # 2 段目をバッファ入力
+		return
+
+	if _phase == 2:
+		# キックコンボで Dummy2 を殴れるかの実効確認。
+		var state2 := str(_melee.get("_state"))
+		if bool(_dummy2_health.call("is_downed")):
+			_evaluate()
+			return
+		if _frames >= MAX_FRAMES + 800:
+			print("[timeout kick] frames=%d" % _frames)
+			_evaluate()
+			return
+		if state2 == "locomotion":
+			var pos2 := _dummy2.global_position
+			pos2.z -= 1.0
+			pos2.y = _player.global_position.y
+			_player.global_position = pos2
+			_melee.call("kick")
+		elif state2 == "kick_1" or state2 == "kick_2":
+			_melee.call("kick")
 
 
 func _evaluate() -> void:
@@ -145,6 +170,10 @@ func _evaluate() -> void:
 	_assert("コンボが 2 段目まで連鎖した", _reached_melee_2)
 	_assert("連打で HP が尽きてダウンした", downed and hp <= 0.0)
 	_assert("RunState に robber ダウンが記録された", RunState.robbers_downed >= 1)
+	var kick_hp := float(_dummy2_health.call("current_hp"))
+	var kick_downed: bool = bool(_dummy2_health.call("is_downed"))
+	print("[result] kick: dummy2 hp=%.1f downed=%s" % [kick_hp, str(kick_downed)])
+	_assert("キックコンボでも命中し Dummy2 がダウンした", kick_downed)
 
 	print("=== 結果: PASS=%d FAIL=%d ===" % [_pass, _fail])
 	print("ALL PASS" if _fail == 0 else "HAS FAILURE")

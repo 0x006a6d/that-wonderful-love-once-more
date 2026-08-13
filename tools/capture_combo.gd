@@ -27,6 +27,7 @@ var _hitbox: Area3D = null
 var _playback: AnimationNodeStateMachinePlayback = null
 
 var _frames: int = 0
+var _key: Key = KEY_J
 var _press_times: Array[float] = []
 var _end_time: float = 3.5
 var _pressed: Array[bool] = []
@@ -50,6 +51,21 @@ func _ready() -> void:
 			# 速い連打 (旧・受付窓方式でフックが出なかったテンポ)。
 			_press_times = [1.0, 1.15, 1.30]
 			_end_time = 4.0
+		"k1":
+			# キック単発。
+			_key = KEY_K
+			_press_times = [1.0]
+			_end_time = 3.5
+		"k3":
+			# キック3連 (人間の連打相当 0.35s 間隔)。
+			_key = KEY_K
+			_press_times = [1.0, 1.35, 1.70]
+			_end_time = 4.5
+		"kf":
+			# キック速い3連 (0.15s 間隔、キュー消化の確認)。
+			_key = KEY_K
+			_press_times = [1.0, 1.15, 1.30]
+			_end_time = 4.5
 	for i in range(_press_times.size()):
 		_pressed.append(false)
 	_csv.append("frame,time,state,node,pos,hitbox_monitoring")
@@ -114,11 +130,11 @@ func _build_stage() -> void:
 
 func _press() -> void:
 	var ev := InputEventKey.new()
-	ev.physical_keycode = KEY_J
+	ev.physical_keycode = _key
 	ev.pressed = true
 	Input.parse_input_event(ev)
 	var rel := InputEventKey.new()
-	rel.physical_keycode = KEY_J
+	rel.physical_keycode = _key
 	rel.pressed = false
 	# release は少し後に送る (押下エッジのみ意味を持つ)
 	get_tree().create_timer(0.03, true, false, true).timeout.connect(

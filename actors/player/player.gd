@@ -14,10 +14,13 @@ extends CharacterBody3D
 @export var decel: float = 14.0
 ## 攻撃開始時のブレーキ（m/s²）。移動慣性を踏み込み一歩ぶんだけ残して殺す。
 @export var attack_brake: float = 30.0
-## コンボ各段の踏み込み初速（m/s、x=ジャブ y=ストレート z=フック）。
+## パンチ各段の踏み込み初速（m/s、x=ジャブ y=ストレート z=フック）。
 ## 段が進むほど深く踏み込み、ノックバックした相手にフィニッシュが届くようにする。
 ## attack_brake で減衰するため「一歩踏み込んで止まる」挙動になる。
 @export var lunge_speeds: Vector3 = Vector3(1.5, 2.5, 3.5)
+## キック各段の踏み込み初速（m/s、x=前蹴り y=ひざ z=ハイキック）。
+## ひざは射程が短いため深めに踏み込む。
+@export var kick_lunge_speeds: Vector3 = Vector3(1.5, 3.0, 2.5)
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 
@@ -55,12 +58,13 @@ func _ready() -> void:
 
 
 ## コンボの段開始で前方へ踏み込む（attack_brake が減衰を担う）。
-func _on_stage_started(stage: int) -> void:
+func _on_stage_started(kind: StringName, stage: int) -> void:
 	if _model == null:
 		return
 	var yaw := _model.global_rotation.y
 	var forward := Vector3(sin(yaw), 0.0, cos(yaw))
-	var speed_for_stage: float = [lunge_speeds.x, lunge_speeds.y, lunge_speeds.z][stage - 1]
+	var speeds := kick_lunge_speeds if kind == &"kick" else lunge_speeds
+	var speed_for_stage: float = [speeds.x, speeds.y, speeds.z][stage - 1]
 	velocity.x = forward.x * speed_for_stage
 	velocity.z = forward.z * speed_for_stage
 
@@ -106,6 +110,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("attack"):
 		if _melee != null:
 			_melee.call("attack")
+	elif event.is_action_pressed("kick"):
+		if _melee != null:
+			_melee.call("kick")
 
 
 ## MeleeHitbox の Call Method Track から呼ばれる（有効化）。
