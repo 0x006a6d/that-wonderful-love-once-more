@@ -27,10 +27,11 @@ const MELEE_2_RES: String = "res://actors/player/anim/melee_2.res"
 @export var model_path: NodePath = ^"../Model"
 ## locomotion ブレンドの基準速度（この速度で blend=1.0=ジョグ）。
 @export var locomotion_max_speed: float = 4.5
-## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓を過ぎたら素早く戻す）。
-@export var melee_1_out_ratio: float = 0.55
-## melee_2 をこの再生割合まで進めたら待機へ抜ける。
-@export var melee_2_out_ratio: float = 0.70
+## melee_1 をこの再生割合まで進めたら次段/待機へ抜ける（判定窓の終了 77% の直後。
+## クリップはパンチ区間だけに切り出し済みなので、ほぼ振り切ってから抜ける）。
+@export var melee_1_out_ratio: float = 0.85
+## melee_2 をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 81% の直後）。
+@export var melee_2_out_ratio: float = 0.90
 
 signal combo_started()
 signal combo_finished()
