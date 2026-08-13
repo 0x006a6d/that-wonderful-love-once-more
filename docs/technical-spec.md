@@ -79,7 +79,7 @@ enum Ending { IDEAL, NORMAL, DRIFT, FAILURE }
 
 |ファイル|用途|
 |---|---|
-|`vrms/nikechan_v2.vrm`|標準の主人公モデル|
+|`vrms/nikechan_v2.vrm`（`assets/vrm/nikechan_player.vrm` として配置）|標準の主人公モデル|
 |`vrms/nikechan_v2_outerwear.vrm`|アウター着用版。逸脱ルートでの見た目変化に使用（M9以降）|
 |`vrms/nikechan_v1.vrm`|使用しない|
 

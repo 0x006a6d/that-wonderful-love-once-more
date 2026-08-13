@@ -8,7 +8,7 @@ extends SceneTree
 ##
 ## 実行: godot --path . --headless --script res://tools/measure_stride.gd
 
-const VRM := "res://assets/vrm/nikechan_v2.vrm"
+const VRM := "res://assets/vrm/nikechan_player.vrm"
 const STEP := 0.033
 
 # [表示名, シーン, アニメキー]

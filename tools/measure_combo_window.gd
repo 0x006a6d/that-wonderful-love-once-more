@@ -4,7 +4,7 @@ extends SceneTree
 # 拳前方距離を細かい刻みでサンプリングし、判定ウィンドウ (拳が前方に出ている区間) を出す。
 # 使い方: godot --path . --headless --script tools/measure_combo_window.gd
 
-const VRM_SCENE: String = "res://assets/vrm/nikechan_v2.vrm"
+const VRM_SCENE: String = "res://assets/vrm/nikechan_player.vrm"
 const UNIV_SCENE: String = "res://assets/motions/universal_animation_library.gltf"
 const CROSS_FBX: String = "res://assets/motions/mixamo_cross_punch.fbx"
 const SAMPLE_STEP: float = 0.033

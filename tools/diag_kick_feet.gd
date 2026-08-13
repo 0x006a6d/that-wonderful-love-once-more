@@ -7,7 +7,7 @@ extends SceneTree
 ##
 ## 実行: godot --path . --headless --script res://tools/diag_kick_feet.gd
 
-const VRM := "res://assets/vrm/nikechan_v2.vrm"
+const VRM := "res://assets/vrm/nikechan_player.vrm"
 const STEP := 0.05
 ## 立ち姿勢の足の planar 基準はほぼ 0.05-0.15m。蹴りの「振り」は 0.35m 超で判定。
 const PEAK_MIN := 0.35
@@ -20,6 +20,7 @@ const SOURCES: Array = [
 	["kick_side (Side Kick)", "res://assets/motions/mixamo_kick_side.fbx"],
 	["kick_high_left (Kicking2)", "res://assets/motions/mixamo_kick_high_left.fbx"],
 	["kick_roundhouse (Roundhouse Kick)", "res://assets/motions/mixamo_kick_roundhouse.fbx"],
+	["kick_mma (Mma Kick)", "res://assets/motions/mixamo_kick_mma.fbx"],
 ]
 
 

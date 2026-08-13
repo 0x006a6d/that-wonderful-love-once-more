@@ -1,6 +1,6 @@
 extends Node3D
 
-# 借り物モーション (Quaternius / Mixamo) を nikechan_v2.vrm の GeneralSkeleton に
+# 借り物モーション (Quaternius / Mixamo) を nikechan_player.vrm の GeneralSkeleton に
 # リターゲット済みトラックで再生する検証シーン。
 #
 # assets/motions/ 以下を走査して自動登録する:
@@ -10,7 +10,7 @@ extends Node3D
 # animation_name は "<library>/<anim>" 形式で指定する。
 #   例: "mixamo/Cross_Punch" / "motion/Punch_Jab"
 
-const VRM_SCENE: String = "res://assets/vrm/nikechan_v2.vrm"
+const VRM_SCENE: String = "res://assets/vrm/nikechan_player.vrm"
 const MOTIONS_DIR: String = "res://assets/motions"
 
 # 数値 QC の結果、Mixamo Cross_Punch が拳ほぼ肩高さ (拳高さ−肩高さ ≈ +0.063m) で

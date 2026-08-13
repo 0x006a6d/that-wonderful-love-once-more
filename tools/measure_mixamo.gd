@@ -11,7 +11,7 @@ extends SceneTree
 #
 # 使い方: godot --path . --headless --script tools/measure_mixamo.gd
 
-const VRM_SCENE: String = "res://assets/vrm/nikechan_v2.vrm"
+const VRM_SCENE: String = "res://assets/vrm/nikechan_player.vrm"
 const SAMPLE_STEP: float = 0.05
 
 # 表示名 -> FBX パス

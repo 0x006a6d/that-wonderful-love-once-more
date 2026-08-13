@@ -1,7 +1,7 @@
 [gd_scene load_steps=9 format=3 uid="uid://cplayr0nikeche01"]
 
 [ext_resource type="Script" path="res://actors/player/player.gd" id="1_player"]
-[ext_resource type="PackedScene" uid="uid://bs80ck7gp7cn8" path="res://assets/vrm/nikechan_v2.vrm" id="2_vrm"]
+[ext_resource type="PackedScene" uid="uid://celvukntwnoc7" path="res://assets/vrm/nikechan_player.vrm" id="2_vrm"]
 [ext_resource type="Script" path="res://actors/player/player_camera.gd" id="3_camera"]
 [ext_resource type="Script" path="res://actors/player/player_melee.gd" id="4_melee"]
 [ext_resource type="Script" path="res://actors/shared/hitbox.gd" id="5_hitbox"]

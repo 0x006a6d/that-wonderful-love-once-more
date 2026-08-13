@@ -8,7 +8,7 @@ extends SceneTree
 ##
 ## 実行: godot --path . --headless --script res://tools/qc_melee_res.gd
 
-const VRM := "res://assets/vrm/nikechan_v2.vrm"
+const VRM := "res://assets/vrm/nikechan_player.vrm"
 const FPS := 60.0
 ## 「振り」とみなす XZ 到達のしきい値。ガード帯 (0.28-0.35) より上。
 const SWING_MIN := 0.36

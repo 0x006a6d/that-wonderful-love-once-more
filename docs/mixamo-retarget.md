@@ -1,4 +1,4 @@
-# Mixamo モーションを nikechan_v2.vrm にリターゲットする手順
+# Mixamo モーションを nikechan_player.vrm にリターゲットする手順
 
 Windows 側の Godot エディタ (4.7.1) 上で行う作業です。Godot 未経験を前提に、順番どおりに進めれば動くように書いています。WSL では Vulkan が CPU 実行になり GUI が実用にならないため、この作業は必ず Windows 側の Godot で行ってください。
 
@@ -12,13 +12,13 @@ C:\Users\jun\godot\Godot_v4.7.1-stable_win64_console.exe
 
 ## 全体像
 
-Mixamo のアニメーションは Mixamo 独自のボーン名 (mixamorig:Hips 等) を持ちます。nikechan_v2.vrm のスケルトンは VRM/Humanoid のボーン構成です。両者を直接つなぐことはできないため、Godot の「Bone Map」機能で両方を共通規格 `SkeletonProfileHumanoid` にマッピングし、その共通規格を経由してモーションを流し込みます (リターゲット)。
+Mixamo のアニメーションは Mixamo 独自のボーン名 (mixamorig:Hips 等) を持ちます。nikechan_player.vrm のスケルトンは VRM/Humanoid のボーン構成です。両者を直接つなぐことはできないため、Godot の「Bone Map」機能で両方を共通規格 `SkeletonProfileHumanoid` にマッピングし、その共通規格を経由してモーションを流し込みます (リターゲット)。
 
 作業は 3 つに分かれます。
 
 1. Mixamo から攻撃モーションの FBX をダウンロードする
 2. FBX を Godot に取り込み、Bone Map で SkeletonProfileHumanoid を割り当てる
-3. nikechan_v2.vrm のシーンにリターゲット済みアニメを流して再生確認する
+3. nikechan_player.vrm のシーンにリターゲット済みアニメを流して再生確認する
 
 ---
 
@@ -66,14 +66,14 @@ Godot が「FBX のインポートには FBX2glTF が必要です」と表示す
 
 ---
 
-## 3. nikechan_v2.vrm にモーションを流して再生確認する
+## 3. nikechan_player.vrm にモーションを流して再生確認する
 
-VRM 側も humanoid にマッピングされている必要があります。V-Sekai の VRM インポータは通常インポート時に Bone Map (SkeletonProfileHumanoid) を自動設定します。もし後述の再生でボーンがずれる場合は、`res://assets/vrm/nikechan_v2.vrm` を選び 2-3 と同じ手順で Skeleton3D の Bone Map に SkeletonProfileHumanoid が設定されているか確認してください。
+VRM 側も humanoid にマッピングされている必要があります。V-Sekai の VRM インポータは通常インポート時に Bone Map (SkeletonProfileHumanoid) を自動設定します。もし後述の再生でボーンがずれる場合は、`res://assets/vrm/nikechan_player.vrm` を選び 2-3 と同じ手順で Skeleton3D の Bone Map に SkeletonProfileHumanoid が設定されているか確認してください。
 
 ### 3-1. シーンに VRM を配置する
 
 1. Scene → New Scene で新規 3D シーンを作り、ルートを Node3D にします。
-2. FileSystem で `res://assets/vrm/nikechan_v2.vrm` をシーンツリーへドラッグして子として配置します (インスタンス化)。
+2. FileSystem で `res://assets/vrm/nikechan_player.vrm` をシーンツリーへドラッグして子として配置します (インスタンス化)。
    - トゥーン (MToon) シェーダーとアウトラインで、平面的なアニメ調の見た目で立っていることを確認します。
 3. シーンを `res://scenes/test_motion.tscn` などとして保存します。
 
@@ -94,7 +94,7 @@ VRM 側も humanoid にマッピングされている必要があります。V-S
 
 ### 3-3. 髪 (SpringBone) の揺れ確認
 
-nikechan_v2.vrm は VRM SpringBone を持ちます。VRM インポート時に VRMSecondary / spring bone のノードが構築されます。シーンを再生 (F6 で現在のシーンを実行、または Play) して、キャラが動いたときに髪が遅れて揺れる (追従して揺れる) ことを確認します。エディタのビューポートで止めているだけでは揺れないので、必ず実行して確認してください。
+nikechan_player.vrm は VRM SpringBone を持ちます。VRM インポート時に VRMSecondary / spring bone のノードが構築されます。シーンを再生 (F6 で現在のシーンを実行、または Play) して、キャラが動いたときに髪が遅れて揺れる (追従して揺れる) ことを確認します。エディタのビューポートで止めているだけでは揺れないので、必ず実行して確認してください。
 
 ---
 

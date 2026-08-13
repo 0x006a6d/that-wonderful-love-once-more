@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bs80ck7gp7cn8"
-path="res://.godot/imported/nikechan_v2.vrm-6fc14fbf6bd32be7c2b50f91f8059762.scn"
+uid="uid://celvukntwnoc7"
+path="res://.godot/imported/nikechan_player.vrm-2f20572660cfba45c7139c0f7ba2e16a.scn"
 
 [deps]
 
-source_file="res://assets/vrm/nikechan_v2.vrm"
-dest_files=["res://.godot/imported/nikechan_v2.vrm-6fc14fbf6bd32be7c2b50f91f8059762.scn"]
+source_file="res://assets/vrm/nikechan_player.vrm"
+dest_files=["res://.godot/imported/nikechan_player.vrm-2f20572660cfba45c7139c0f7ba2e16a.scn"]
 
 [params]
 
