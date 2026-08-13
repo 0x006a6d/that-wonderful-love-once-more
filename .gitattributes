@@ -1,0 +1,8 @@
+# drvfs 上で CRLF 差分が出る罠への対策。テキストは LF で正規化する
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.vrm binary
+*.glb binary
+*.wav binary
+*.ogg binary

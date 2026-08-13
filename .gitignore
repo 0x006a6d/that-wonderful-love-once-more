@@ -1,0 +1,12 @@
+# Godot 4
+.godot/
+*.translation
+export_presets.cfg
+
+# ビルド成果物
+build/
+export/
+
+# OS
+Thumbs.db
+.DS_Store
