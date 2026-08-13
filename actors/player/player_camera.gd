@@ -24,6 +24,11 @@ extends SpringArm3D
 @export var manual_suppress_time: float = 2.0
 ## オービット入力のデッドゾーン（パッドのスティックドリフト対策）。
 @export var orbit_deadzone: float = 0.15
+## 自動追従が働く移動方向の前方成分（カメラ視線との内積）の下限。
+## 後退 (内積 -1)・真横 (0) では追従せず、前進斜め (0.7) は成分比例の弱さで追従する。
+## カメラ相対入力では目標ヨーが常に現在ヨーから一定角ずれるため、
+## 角度差の閾値では真横移動の永久旋回を防げない（実測で確認済み）。
+@export var follow_forward_min: float = 0.1
 
 var _yaw: float = 0.0
 var _move_dir: Vector3 = Vector3.ZERO
@@ -53,8 +58,14 @@ func _physics_process(delta: float) -> void:
 		_suppress_timer -= delta
 	elif _move_dir.length() > 0.1:
 		# 自動追従: カメラの視線 (-Z) が移動方向と一致するヨーへ補間。
-		var desired := atan2(-_move_dir.x, -_move_dir.z)
-		_yaw = lerp_angle(_yaw, desired, 1.0 - exp(-follow_speed * delta))
+		# 追従の強さは移動方向の前方成分 (視線との内積) に比例させ、
+		# 後退・真横では追従しない (回り込み続け・永久旋回の防止)。
+		var look := -global_transform.basis.z
+		look.y = 0.0
+		var fwd := _move_dir.normalized().dot(look.normalized())
+		if fwd > follow_forward_min:
+			var desired := atan2(-_move_dir.x, -_move_dir.z)
+			_yaw = lerp_angle(_yaw, desired, 1.0 - exp(-follow_speed * fwd * delta))
 
 	rotation.y = _yaw
 	rotation.x = pitch_angle
