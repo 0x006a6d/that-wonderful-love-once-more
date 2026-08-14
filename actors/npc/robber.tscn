@@ -61,7 +61,7 @@ collision_mask = 64
 monitoring = false
 script = ExtResource("4_hitbox")
 source_body_path = NodePath("..")
-ignore_groups = Array[StringName]([&"robber"])
+ignore_groups = Array[StringName]([&"robber", &"civilian"])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="MeleeHitbox"]
 shape = SubResource("Sphere_hitbox")

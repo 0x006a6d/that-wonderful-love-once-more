@@ -60,7 +60,7 @@ res://
 
 `Hitbox` は layer=6 / mask=7。`Hurtbox` は layer=7 / mask=6。本体のCollisionShapeとは別に持たせる。
 
-Hurtbox は陣営に関係なく同じレイヤーに乗るため、誰の攻撃も誰にでも当たる。当てたくない相手は `Hitbox.ignore_groups`（グループ名の配列）で除外する。犯人は `["robber"]` を指定し、味方を殴って `RunState.robbers_downed` が勝手に増える（＝幕が進む）事故を防ぐ。客への攻撃規則は §6.4 のロックオン必須ルールで別途扱う。
+Hurtbox は陣営に関係なく同じレイヤーに乗るため、誰の攻撃も誰にでも当たる。当てたくない相手は `Hitbox.ignore_groups`（グループ名の配列）で除外する。`Hitbox` は既定で `["civilian"]`、犯人の近接は `["robber", "civilian"]` を指定する。これにより、味方を殴って `RunState.robbers_downed` が勝手に増える（＝幕が進む）事故と、近接で客を巻き込む事故を防ぐ。客への攻撃規則は §6.4 のロックオン必須ルールで別途扱う。
 
 ## 3. グローバル型定義
 
@@ -281,12 +281,14 @@ func _disable_hitbox() -> void:
 
 ### 6.4 客への攻撃ルール（重要）
 
-`Hitbox` は既定で `Faction.CIVILIAN` を**無視する**。以下の両方を満たす場合のみ客に通る。
+`Hitbox.ignore_groups` は既定で `civilian` グループを**無視する**。以下の両方を満たす場合のみ客に通す。
 
 1. `LockOnDetector` で客をロックオン中
 2. その状態で攻撃入力が行われた
 
 さらに客の `Health` は `stagger_threshold` を持ち、規定回数（既定3回）に達するまでダウンしない。誤爆でエンディングが壊れることを防ぐ。
+
+現時点では `LockOnDetector` は未実装であり、プレイヤーの `MeleeHitbox` は常に `civilian` を除外する。このため、客に当たる近接攻撃は存在しない。8/22 にロックオンを実装した時点で「客をロックオン中のみ除外を解除する」方式へ置き換える。犯人の近接も客を除外し続け、客への攻撃は銃撃経路を使う。
 
 銃の場合、`RayCast3D` の当たり先が `Faction.CIVILIAN` なら HUD のレティクル色を変更し、警告状態を明示する。
 
@@ -309,13 +311,14 @@ func _disable_hitbox() -> void:
 ```gdscript
 @export var max_hp: float = 100.0
 @export var stagger_threshold: int = 1     # 客は 3
-@export var lethal_hp_threshold: float = 0.0
 
 signal staggered()
 signal downed(lethal: bool)
+
+func take_hit(damage: float, lethal: bool = false) -> void
 ```
 
-`downed` を受けて `RagdollController` がラグドールへ移行し、`RunState.record_down()` を呼ぶ。
+致死判定は攻撃側が `Hitbox.lethal` として持ち、`Hurtbox` が `Health.take_hit(damage, lethal)` へ渡す。近接は `false`、銃撃は `true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
 
 ### 7.2 ステートマシン
 
@@ -349,6 +352,19 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
 - **`RunState.civilians_downed > 0` になった時点で、プレイヤーが接近すると `FLEE_PLAYER` へ**。犯人からではなく、彼女から逃げる
 
 `FLEE_PLAYER` への切り替えは `RunState.civilian_downed` シグナルを購読して行う。
+
+#### 最小実装の状況（8/22 分の前倒し）
+
+`actors/npc/civilian.gd` + `actors/npc/civilian.tscn`。IDLE / PRONE / STAGGERED / DOWNED の4ステートを実装済み。`FLEE_ROBBER` / `FLEE_PLAYER` は8/22に実装するため、enum にだけ定義して遷移は未実装。
+
+- **見た目はプリミティブ**（カプセル）。犯人と同様に見た目を `Model` 子ノード1個へ隔離し、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下に置く。`Model` 以下にロジックもコリジョンも置かない。最終モデルへの差し替えは8/24以降（`docs/game-design.md` §7.1）
+- **幕への追従**は `GameDirector.act_changed` を購読する。PROLOGUE は IDLE、INFILTRATION 以降は PRONE。INFILTRATION 以降に生成した個体も `_ready()` から直接 PRONE へ入る
+- **伏せ姿勢**は `Model` と Hurtbox のカプセルを X 軸に90度回して下げる。各本体原点を基準とした実測で、PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
+- **誤爆防止**は `Health.stagger_threshold = 3`。HPが先に0になっても3回目までは STAGGERED に留まり、一定時間後に直前の IDLE / PRONE へ戻る
+- **ダウン**は固定ポーズ。`Health.downed(lethal)` の値をそのまま `RunState.record_down(self, Faction.CIVILIAN, lethal)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
+- **致死判定は攻撃側**の `Hitbox.lethal` が持つ方式で確定。近接は `false`、銃撃は `true`。銃撃は未実装のため、現時点で実ゲーム内に `lethal = true` を設定する攻撃はない
+- **ロックオンは未実装**。`Hitbox.ignore_groups` によりプレイヤー・犯人いずれの近接も客を除外し、現時点では客に当たる近接攻撃は存在しない。8/22 にプレイヤー側を「客をロックオン中のみ通る」方式へ置き換える
+- `_ready()` で `RunState.civilians_total` を直接加算する。ダウン数・死亡数は `RunState` の既存APIで記録する
 
 ## 9. 犯人（Robber）
 

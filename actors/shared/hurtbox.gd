@@ -40,7 +40,7 @@ func receive_hit(hitbox: Hitbox) -> void:
 	if _owner_body != null and _owner_body.has_method("flash_hit"):
 		_owner_body.call("flash_hit")
 	if _health != null:
-		_health.take_hit(hitbox.damage)
+		_health.take_hit(hitbox.damage, hitbox.lethal)
 
 
 ## 攻撃者から被弾側への水平方向（ノックバックの向き）。

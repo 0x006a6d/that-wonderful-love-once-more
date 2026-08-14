@@ -5,7 +5,8 @@ class_name Health
 ##
 ## 意味論:
 ## - staggered: ダウンに至らない被弾のたびに発火する
-## - downed: HP が 0 まで削られたときに発火する。ただし被弾回数が
+## - downed: HP が 0 まで削られたときに発火する。致死かどうかは攻撃側が持ち、
+##   take_hit() の lethal 引数をそのまま通知する。ただし被弾回数が
 ##   stagger_threshold に達するまではダウンさせない（客の「規定回数叩かないと
 ##   ダウンしない」誤爆防止ルールはこの下限として機能する。HP が先に尽きても
 ##   回数未達なら HP 0 のまま耐えてよろけ扱いになる）
@@ -14,13 +15,9 @@ class_name Health
 @export var max_hp: float = 100.0
 ## ダウンに要する最低被弾回数。客は 3（誤爆防止）、犯人・ダミーは 1。
 @export var stagger_threshold: int = 1
-## 致死ダウン判定のしきい値（将来用）。lethal の確定方法は 8/22 の客実装時に
-## 詰めるため、現時点では未使用。downed は lethal=false 固定で発火する。
-@export var lethal_hp_threshold: float = 0.0
-
 ## よろけ（ダウンには至らない被弾）が発生した。
 signal staggered()
-## ダウンした。lethal=true なら致死（現時点では常に false。上記コメント参照）。
+## ダウンした。lethal=true なら致死（攻撃側の Hitbox.lethal から渡される）。
 signal downed(lethal: bool)
 
 var _hp: float = 0.0
@@ -33,7 +30,8 @@ func _ready() -> void:
 
 
 ## ダメージを受ける。ダウン済みなら何もしない。
-func take_hit(damage: float) -> void:
+## 既定は非致死（近接）。銃撃側は lethal=true を明示する。
+func take_hit(damage: float, lethal: bool = false) -> void:
 	if _is_downed:
 		return
 	_hp = maxf(_hp - damage, 0.0)
@@ -41,8 +39,7 @@ func take_hit(damage: float) -> void:
 
 	if _hp <= 0.0 and _stagger_count >= stagger_threshold:
 		_is_downed = true
-		# lethal は 8/22（客実装）で確定方法を詰める。今日は false 固定。
-		downed.emit(false)
+		downed.emit(lethal)
 	else:
 		staggered.emit()
 

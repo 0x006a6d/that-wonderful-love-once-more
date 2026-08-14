@@ -17,11 +17,11 @@ class_name Hitbox
 ## この Hitbox を出している本体（ノックバック方向の起点）。攻撃者。
 @export var source_body_path: NodePath = ^".."
 
-## この Hitbox が当てない相手のグループ。犯人が味方の犯人を殴って
-## RunState.robbers_downed が勝手に増える（＝幕が進む）事故を防ぐ。
-## 客への攻撃規則（technical-spec §6.4 のロックオン必須）はここではなく
-## 8/22 の客実装で別途入れる。
-@export var ignore_groups: Array[StringName] = []
+## この Hitbox が当てない相手のグループ。客は既定で除外する。
+## 犯人の近接は robber も追加し、味方誤爆による幕進行を防ぐ。
+## プレイヤー側は 8/22 のロックオン実装時に「ロックオン中のみ客へ通る」
+## 方式へ置き換える。
+@export var ignore_groups: Array[StringName] = [&"civilian"]
 
 var damage: float = 0.0
 var knockback: float = 0.0
