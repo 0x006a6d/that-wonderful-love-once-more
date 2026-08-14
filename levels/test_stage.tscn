@@ -1,8 +1,9 @@
-[gd_scene load_steps=14 format=3 uid="uid://cteststage0001"]
+[gd_scene load_steps=15 format=3 uid="uid://cteststage0001"]
 
 [ext_resource type="Script" path="res://levels/test_stage.gd" id="1_stage"]
 [ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://cdummy0nikeche01" path="res://actors/npc/dummy.tscn" id="3_dummy"]
+[ext_resource type="PackedScene" uid="uid://crobbr0nikeche01" path="res://actors/npc/robber.tscn" id="4_robber"]
 
 [sub_resource type="Environment" id="Env_stage"]
 background_mode = 1
@@ -49,7 +50,7 @@ shadow_enabled = true
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env_stage")
 
-[node name="Floor" type="StaticBody3D" parent="."]
+[node name="Floor" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
@@ -61,7 +62,7 @@ shape = SubResource("Box_floor")
 mesh = SubResource("Mesh_floor")
 surface_material_override/0 = SubResource("Mat_floor")
 
-[node name="WallNorth" type="StaticBody3D" parent="."]
+[node name="WallNorth" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -10)
@@ -73,7 +74,7 @@ shape = SubResource("Box_wall")
 mesh = SubResource("Mesh_wall")
 surface_material_override/0 = SubResource("Mat_wall")
 
-[node name="WallSouth" type="StaticBody3D" parent="."]
+[node name="WallSouth" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 10)
@@ -85,7 +86,7 @@ shape = SubResource("Box_wall")
 mesh = SubResource("Mesh_wall")
 surface_material_override/0 = SubResource("Mat_wall")
 
-[node name="WallEast" type="StaticBody3D" parent="."]
+[node name="WallEast" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 10, 1.5, 0)
@@ -97,7 +98,7 @@ shape = SubResource("Box_wall")
 mesh = SubResource("Mesh_wall")
 surface_material_override/0 = SubResource("Mat_wall")
 
-[node name="WallWest" type="StaticBody3D" parent="."]
+[node name="WallWest" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -10, 1.5, 0)
@@ -109,7 +110,7 @@ shape = SubResource("Box_wall")
 mesh = SubResource("Mesh_wall")
 surface_material_override/0 = SubResource("Mat_wall")
 
-[node name="PillarA" type="StaticBody3D" parent="."]
+[node name="PillarA" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 1.5, -4)
@@ -121,7 +122,7 @@ shape = SubResource("Box_pillar")
 mesh = SubResource("Mesh_pillar")
 surface_material_override/0 = SubResource("Mat_pillar")
 
-[node name="PillarB" type="StaticBody3D" parent="."]
+[node name="PillarB" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1.5, -4)
@@ -133,7 +134,7 @@ shape = SubResource("Box_pillar")
 mesh = SubResource("Mesh_pillar")
 surface_material_override/0 = SubResource("Mat_pillar")
 
-[node name="PillarC" type="StaticBody3D" parent="."]
+[node name="PillarC" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 1.5, 4)
@@ -145,7 +146,7 @@ shape = SubResource("Box_pillar")
 mesh = SubResource("Mesh_pillar")
 surface_material_override/0 = SubResource("Mat_pillar")
 
-[node name="PillarD" type="StaticBody3D" parent="."]
+[node name="PillarD" type="StaticBody3D" parent="." groups=["nav_source"]]
 collision_layer = 1
 collision_mask = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 1.5, 4)
@@ -157,6 +158,14 @@ shape = SubResource("Box_pillar")
 mesh = SubResource("Mesh_pillar")
 surface_material_override/0 = SubResource("Mat_pillar")
 
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+
+[node name="PatrolA" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -6)
+
+[node name="PatrolB" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.2, -6)
+
 [node name="Player" parent="." instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 2)
 
@@ -165,3 +174,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 3)
 
 [node name="Dummy2" parent="." instance=ExtResource("3_dummy")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 5)
+
+[node name="Robber1" parent="." instance=ExtResource("4_robber")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -6)
+patrol_points = Array[NodePath]([NodePath("../PatrolA"), NodePath("../PatrolB")])

@@ -24,6 +24,16 @@ extends CharacterBody3D
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 
+@export_group("Hurt")
+## 被弾時のノックバック初速（m/s）。
+@export var hurt_knockback_speed: float = 3.5
+## ノックバックが減衰しきるまでの時間（秒）。この間は移動入力を受け付けない。
+@export var hurt_knockback_decay: float = 0.28
+## 被弾時のカメラシェイク強度（0.0-1.0）。VRM は色を変えられないため、
+## 手応えの提示はカメラ側で行う。
+@export var hurt_shake_strength: float = 0.8
+@export_group("")
+
 ## 命中時のヒットストップ時間（実時間・秒）。
 @export var hit_stop_duration: float = 0.09
 ## 命中時のヒットストップのスロー係数（0 に近いほど強く止まる）。
@@ -36,12 +46,22 @@ extends CharacterBody3D
 @export var melee_path: NodePath = ^"PlayerMelee"
 @export var hitbox_path: NodePath = ^"Model/MeleeHitbox"
 @export var camera_shake_path: NodePath = ^"SpringArm3D/Camera3D/CameraShake"
+@export var health_path: NodePath = ^"Health"
+
+## HP が尽きた。ゲームオーバー処理・リスタートは後日（tasks.md にまだ無い）。
+signal player_downed()
 
 var _camera_rig: Node3D = null
 var _model: Node3D = null
 var _melee: Node = null
 var _hitbox: Hitbox = null
 var _camera_shake: Node = null
+var _health: Health = null
+
+## 被弾ロックの残り時間（秒）。0 より大きい間は移動入力を受け付けない。
+var _hurt_timer: float = 0.0
+var _knockback_vel: Vector3 = Vector3.ZERO
+var _downed: bool = false
 
 
 func _ready() -> void:
@@ -50,11 +70,14 @@ func _ready() -> void:
 	_melee = get_node_or_null(melee_path)
 	_hitbox = get_node_or_null(hitbox_path) as Hitbox
 	_camera_shake = get_node_or_null(camera_shake_path)
+	_health = get_node_or_null(health_path) as Health
 
 	if _hitbox != null:
 		_hitbox.hit_landed.connect(_on_hit_landed)
 	if _melee != null and _melee.has_signal("stage_started"):
 		_melee.connect("stage_started", _on_stage_started)
+	if _health != null:
+		_health.downed.connect(_on_health_downed)
 
 
 ## コンボの段開始で前方へ踏み込む（attack_brake が減衰を担う）。
@@ -75,9 +98,19 @@ func _physics_process(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := _camera_relative_direction(input_dir)
 
+	if _hurt_timer > 0.0:
+		_hurt_timer = maxf(_hurt_timer - delta, 0.0)
+
 	# 速度は目標値へ加減速で寄せる（即時切替をやめて慣性＝質量感を出す）。
 	var horizontal := Vector2(velocity.x, velocity.z)
-	if attacking:
+	if _downed:
+		horizontal = horizontal.move_toward(Vector2.ZERO, decel * delta)
+	elif _hurt_timer > 0.0:
+		# 被弾ロック中。ノックバックに流されるだけで、入力・攻撃は通らない。
+		horizontal = Vector2(_knockback_vel.x, _knockback_vel.z)
+		_knockback_vel = _knockback_vel.move_toward(Vector3.ZERO,
+			(hurt_knockback_speed / hurt_knockback_decay) * delta)
+	elif attacking:
 		# 攻撃中は移動入力を無視し、強めのブレーキで踏み込み一歩ぶんだけ滑って止まる。
 		horizontal = horizontal.move_toward(Vector2.ZERO, attack_brake * delta)
 	elif direction.length() > 0.001:
@@ -100,13 +133,16 @@ func _physics_process(delta: float) -> void:
 		var planar := Vector2(velocity.x, velocity.z).length()
 		_melee.call("set_locomotion", planar)
 
-	# カメラの自動追従へ移動方向を注入する（攻撃中・停止中は ZERO）。
+	# カメラの自動追従へ移動方向を注入する（攻撃中・被弾中・停止中は ZERO）。
 	if _camera_rig != null and _camera_rig.has_method("set_move_direction"):
-		var cam_dir := Vector3.ZERO if attacking else direction
+		var locked: bool = attacking or _downed or _hurt_timer > 0.0
+		var cam_dir := Vector3.ZERO if locked else direction
 		_camera_rig.call("set_move_direction", cam_dir)
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _downed or _hurt_timer > 0.0:
+		return
 	if event.is_action_pressed("attack"):
 		if _melee != null:
 			_melee.call("attack")
@@ -137,6 +173,41 @@ func _on_hit_landed(_target: Node3D) -> void:
 		hs.call("apply", hit_stop_duration, hit_stop_scale)
 	if _camera_shake != null and _camera_shake.has_method("shake"):
 		_camera_shake.call("shake", hit_shake_strength)
+
+
+## Hurtbox から呼ばれる。direction は攻撃者→自分の水平方向。
+## 被弾ロックの間は移動入力と攻撃入力を受け付けない（一方的な連打で押し切れないように）。
+func receive_knockback(direction: Vector3, strength: float) -> void:
+	if _downed:
+		return
+	var d := direction
+	d.y = 0.0
+	if d.length() < 0.001:
+		return
+	_knockback_vel = d.normalized() * hurt_knockback_speed * clampf(strength / 5.0, 0.5, 2.0)
+	_hurt_timer = hurt_knockback_decay
+
+
+## Hurtbox から呼ばれる。VRM のマテリアルは触らず、カメラで被弾を提示する。
+func flash_hit() -> void:
+	if _camera_shake != null and _camera_shake.has_method("shake"):
+		_camera_shake.call("shake", hurt_shake_strength)
+
+
+func _on_health_downed(_lethal: bool) -> void:
+	if _downed:
+		return
+	_downed = true
+	_hurt_timer = 0.0
+	player_downed.emit()
+
+
+func is_downed() -> bool:
+	return _downed
+
+
+func current_hp() -> float:
+	return _health.current_hp() if _health != null else 0.0
 
 
 func _camera_relative_direction(input_dir: Vector2) -> Vector3:

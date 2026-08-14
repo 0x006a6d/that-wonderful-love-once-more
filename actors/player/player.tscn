@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://cplayr0nikeche01"]
+[gd_scene load_steps=12 format=3 uid="uid://cplayr0nikeche01"]
 
 [ext_resource type="Script" path="res://actors/player/player.gd" id="1_player"]
 [ext_resource type="PackedScene" uid="uid://celvukntwnoc7" path="res://assets/vrm/nikechan_player.vrm" id="2_vrm"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://actors/player/player_melee.gd" id="4_melee"]
 [ext_resource type="Script" path="res://actors/shared/hitbox.gd" id="5_hitbox"]
 [ext_resource type="Script" path="res://fx/camera_shake.gd" id="6_shake"]
+[ext_resource type="Script" path="res://actors/shared/health.gd" id="7_health"]
+[ext_resource type="Script" path="res://actors/shared/hurtbox.gd" id="8_hurtbox"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
 radius = 0.35
@@ -14,7 +16,11 @@ height = 1.6
 [sub_resource type="SphereShape3D" id="Sphere_hitbox"]
 radius = 0.45
 
-[node name="Player" type="CharacterBody3D"]
+[sub_resource type="CapsuleShape3D" id="Capsule_hurt"]
+radius = 0.45
+height = 1.7
+
+[node name="Player" type="CharacterBody3D" groups=["player"]]
 collision_layer = 2
 collision_mask = 1
 script = ExtResource("1_player")
@@ -39,6 +45,22 @@ model_path = NodePath("../Model")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("Capsule_body")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("7_health")
+max_hp = 100.0
+stagger_threshold = 1
+
+[node name="Hurtbox" type="Area3D" parent="."]
+collision_layer = 64
+collision_mask = 32
+script = ExtResource("8_hurtbox")
+owner_body_path = NodePath("..")
+health_path = NodePath("../Health")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("Capsule_hurt")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)

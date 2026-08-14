@@ -288,6 +288,14 @@ func _disable_hitbox() -> void:
 
 銃の場合、`RayCast3D` の当たり先が `Faction.CIVILIAN` なら HUD のレティクル色を変更し、警告状態を明示する。
 
+### 6.5 プレイヤーの被弾（8/17）
+
+プレイヤーも `Health` + `Hurtbox` を持つ（NPCと同じスクリプトを共有する）。犯人の攻撃で HP が減り、ノックバックする。
+
+- `hurt_knockback_decay` 秒のあいだ移動入力・攻撃入力を受け付けない（被弾ロック）。一方的な連打で押し切られないための下限
+- VRM のマテリアルは触らない。被弾の提示はカメラシェイクで行う（`hurt_shake_strength`）
+- HP が尽きたら `player_downed` シグナルを出して入力を止めるだけ。ゲームオーバー画面・リスタートは `tasks.md` に項目が無いため未実装
+
 ## 7. NPC共通
 
 ### 7.1 Health
@@ -306,6 +314,22 @@ signal downed(lethal: bool)
 ### 7.2 ステートマシン
 
 `actors/shared/state_machine.gd` を共通基盤とし、各NPCはステート集合だけを差し替える。
+
+実装済みのAPI（8/17）。ステートは各NPCの enum（int）で識別し、1ステートにつき進入・毎物理フレーム・退出の `Callable` を登録する。「1ステート1ノード」方式は採らない（.tscn の階層が膨らみ、エディタ操作の負担が増える）。
+
+```gdscript
+signal state_changed(from_state: int, to_state: int)
+func add_state(id: int, state_name: StringName, on_enter := Callable(),
+        on_physics := Callable(), on_exit := Callable()) -> void
+func start(id: int) -> void
+func transition_to(id: int, force: bool = false) -> void   # force=true で同ステート再進入
+func physics_update(delta: float) -> void                  # 所有者の _physics_process から呼ぶ
+func current() -> int
+func current_name() -> StringName
+func time_in_state() -> float
+```
+
+駆動を所有者側の明示呼び出しにしているのは、本体の移動処理との実行順を確定させるため。ノードの `_physics_process` に任せると順序が読めない。`transition_to()` は進入コールバック内からの再入を検出して遷移後に適用する。
 
 ## 8. 客（Civilian）
 
@@ -333,6 +357,23 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 |`leader.gd`|`SHIELD`|最寄りの客を掴んで盾にする。盾状態のとき、プレイヤーの射線が盾越しなら弾は客に当たる。接近して `GRAPPLE` されると解除|
 |`gunner.gd`|`COVER`|`cover` レイヤーの `Marker3D` から、プレイヤーへの射線が通る位置を選んで移動する|
 |`erratic.gd`|—|`shoot_civilian_interval` 秒ごとに、最寄りの客を撃つ。放置するとエンディングが悪化する|
+
+#### 共通挙動の実装状況（8/17）
+
+`actors/npc/robber.gd` + `actors/npc/robber.tscn`。PATROL / ALERT / CHASE / ATTACK / STAGGERED / DOWNED の6ステートを実装済み（`COVER` / `SHIELD` は役割スクリプトの担当）。
+
+- **見た目はプリミティブ**（カプセル）。Mixamo素材は Without Skin でメッシュを持たず、主人公VRMは公式アセットのため流用しない。状態はマテリアル色で示す（通常＝暗赤、警戒・追跡＝橙、攻撃の予備動作＝赤）
+- **向きの規約**: 犯人は本体（`CharacterBody3D`）を回し、前方は Godot 標準の -Z。主人公は VRM の都合で `Model` ノードの +Z が前方であり、規約が異なる
+- **攻撃判定の窓はスクリプト側のタイマー**で開閉する（予備動作 `attack_telegraph` → 判定 `attack_active` → 硬直 `attack_recovery` → `attack_cooldown`）。§6.3 の Call Method Track 方式に揃えられないのは、犯人がまだリグとクリップを持たないため。リグ導入時に移行する
+- **知覚**は距離（`sight_range`）→ 視野角（`sight_fov_deg`、`close_notice_range` 以内は角度を問わない）→ 遮蔽（world レイヤーへのレイ）の3段。見失って `lose_sight_duration` 秒で PATROL へ戻る
+- **追跡**は `NavigationAgent3D`。ナビゲーションマップが未生成のときだけ直線移動にフォールバックする（ベイク前のステージでも動作確認できるようにするための保険）
+- 追跡速度（3.2 m/s）はプレイヤー（4.5 m/s）より遅い。逃げれば振り切れる
+- ALERT 到達時と自身のダウン時に `GameDirector.notify_robber_engaged()` を呼ぶ（§5 の INFILTRATION → ENGAGEMENT 条件）
+- ダウン時は `RunState.record_down()` を呼び、Hurtbox の監視を切って固定ポーズで倒れる。Area3D の監視フラグは信号処理中に書き換えられないため `set_deferred()` を使う
+
+#### ナビメッシュのベイク
+
+仮ステージ（`levels/test_stage.gd`）は実行時に同期ベイクする。`nav_source` グループのノード（床・壁・柱）からジオメトリを集める方式で、エディタ操作を人間に渡さずに済ませるため。`cell_size` はプロジェクト設定の既定ナビゲーションマップ（0.25）と一致させる（食い違うとエッジのラスタライズ警告が出る）。銀行ロビー（8/18〜）では事前ベイク済みの `NavigationMesh` リソースへ移す。
 
 ## 10. 警察（Police）
 

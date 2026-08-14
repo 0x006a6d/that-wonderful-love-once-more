@@ -1,0 +1,75 @@
+[gd_scene load_steps=10 format=3 uid="uid://crobbr0nikeche01"]
+
+[ext_resource type="Script" path="res://actors/npc/robber.gd" id="1_robber"]
+[ext_resource type="Script" path="res://actors/shared/health.gd" id="2_health"]
+[ext_resource type="Script" path="res://actors/shared/hurtbox.gd" id="3_hurtbox"]
+[ext_resource type="Script" path="res://actors/shared/hitbox.gd" id="4_hitbox"]
+[ext_resource type="Script" path="res://actors/shared/state_machine.gd" id="5_sm"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule_body"]
+radius = 0.35
+height = 1.6
+
+[sub_resource type="CapsuleMesh" id="Mesh_capsule"]
+radius = 0.35
+height = 1.6
+
+[sub_resource type="StandardMaterial3D" id="Mat_robber"]
+albedo_color = Color(0.42, 0.24, 0.26, 1)
+
+[sub_resource type="CapsuleShape3D" id="Capsule_hurt"]
+radius = 0.45
+height = 1.7
+
+[sub_resource type="SphereShape3D" id="Sphere_hitbox"]
+radius = 0.5
+
+[node name="Robber" type="CharacterBody3D" groups=["robber"]]
+collision_layer = 4
+collision_mask = 3
+script = ExtResource("1_robber")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+shape = SubResource("Capsule_body")
+
+[node name="Mesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("Mesh_capsule")
+surface_material_override/0 = SubResource("Mat_robber")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+max_hp = 100.0
+stagger_threshold = 1
+
+[node name="Hurtbox" type="Area3D" parent="."]
+collision_layer = 64
+collision_mask = 32
+script = ExtResource("3_hurtbox")
+owner_body_path = NodePath("..")
+health_path = NodePath("../Health")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Hurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+shape = SubResource("Capsule_hurt")
+
+[node name="MeleeHitbox" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -0.7)
+collision_layer = 32
+collision_mask = 64
+monitoring = false
+script = ExtResource("4_hitbox")
+source_body_path = NodePath("..")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="MeleeHitbox"]
+shape = SubResource("Sphere_hitbox")
+
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.5
+target_desired_distance = 0.5
+radius = 0.4
+avoidance_enabled = false
+
+[node name="StateMachine" type="Node" parent="."]
+script = ExtResource("5_sm")

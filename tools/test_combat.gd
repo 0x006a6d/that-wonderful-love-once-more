@@ -52,6 +52,11 @@ func _ready() -> void:
 		return
 	_stage = packed.instantiate()
 	add_child(_stage)
+	# 犯人（8/17 で仮ステージに追加）はこの検証の対象外。殴られて条件が変わるのを
+	# 防ぐため外す。犯人側の検証は tools/test_robber_ai.tscn が担当する。
+	var robber := _stage.get_node_or_null("Robber1")
+	if robber != null:
+		robber.queue_free()
 	_player = _stage.get_node_or_null("Player") as Node3D
 	_dummy = _stage.get_node_or_null("Dummy1") as Node3D
 	if _player == null or _dummy == null:

@@ -116,7 +116,7 @@
 ## 8/16（日）｜手応えの詰め・予備日
 
 - [ ] 8/15 で残った調整（判定フレーム、ヒットストップの秒数、ノックバック量）
-- [ ] 前倒しできそうなら犯人の共通ステート実装に入る
+- [x] 前倒しできそうなら犯人の共通ステート実装に入る（8/14 に着手。下記 8/17 を実施）
 
 **この日は意図的に空けてある。** 未経験ぶんの遅れをここで吸収する。
 
@@ -124,14 +124,17 @@
 
 ## 8/17（月）｜犯人AI（共通挙動）
 
-- [ ] `state_machine.gd`
-- [ ] `robber.gd`: PATROL / ALERT / CHASE / ATTACK / STAGGERED / DOWNED
-- [ ] `NavigationRegion3D` をベイク、`NavigationAgent3D` で追跡
-- [ ] ダウン時に `RunState.record_down()` を呼ぶ（ラグドールは使わず固定ポーズ）
+- [x] `state_machine.gd`
+- [x] `robber.gd`: PATROL / ALERT / CHASE / ATTACK / STAGGERED / DOWNED
+- [x] `NavigationRegion3D` をベイク、`NavigationAgent3D` で追跡（仮ステージは実行時に同期ベイク）
+- [x] ダウン時に `RunState.record_down()` を呼ぶ（ラグドールは使わず固定ポーズ）
+- [x] プレイヤー側の被弾（`Health` / `Hurtbox` / 被弾ロック）。「殴り合い」の成立に必要なため同時に実装
 
 **受け入れ条件**
 
 - 犯人1体が接近してきて殴り合いになる
+    - ヘッドレス検証は `tools/test_robber_ai.tscn` で 11 項目 PASS（8/14 実施）
+    - **実機での目視確認は未実施。** 仮ステージ北西に `Robber1` を配置してある
 
 ---
 
