@@ -240,18 +240,37 @@ func _update_down(delta: float) -> void:
 	if _down_timer > 0.0:
 		_down_timer = maxf(_down_timer - delta, 0.0)
 		if _down_timer <= 0.0:
-			# 立ち上がり開始。HP はここで全快させる。
-			if _health != null:
-				_health.revive()
-			_stand_up_timer = stand_up_time
-			_tilt_model(0.0, stand_up_time, Tween.EASE_OUT)
+			_start_stand_up()
 		return
 
 	if _stand_up_timer > 0.0:
 		_stand_up_timer = maxf(_stand_up_timer - delta, 0.0)
-		if _stand_up_timer <= 0.0:
-			_downed = false
-			player_recovered.emit()
+		if _stand_up_timer > 0.0:
+			return
+		_finish_recovery()
+		return
+
+	# どちらのタイマーも尽きている。down_duration / stand_up_time に 0 を
+	# 設定するとここへ落ちる。復帰を確定させないと、倒れたまま操作不能になる
+	# （値の設定だけで「ダウンして戻らない」不具合が再発してしまう）。
+	_finish_recovery()
+
+
+func _start_stand_up() -> void:
+	_stand_up_timer = stand_up_time
+	_tilt_model(0.0, stand_up_time, Tween.EASE_OUT)
+
+
+## 立ち上がり完了。HP の全快はここで行う。立ち上がり中に全快させると
+## Health のダウン無敵が切れる一方で入力は戻っておらず、避けられない一方的な
+## 被弾窓（stand_up_time 秒）ができるため。
+func _finish_recovery() -> void:
+	if _health != null:
+		_health.revive()
+	_stand_up_timer = 0.0
+	_tilt_model(0.0, 0.0, Tween.EASE_OUT)
+	_downed = false
+	player_recovered.emit()
 
 
 ## モデルを前傾させる／戻す。ダウン用クリップを繋ぐまでの暫定表現。
@@ -260,6 +279,11 @@ func _tilt_model(angle_deg: float, duration: float, ease_type: Tween.EaseType) -
 		return
 	if _down_tween != null and _down_tween.is_valid():
 		_down_tween.kill()
+	if duration <= 0.0:
+		# 補間時間が 0（インスペクタで 0 を指定した場合）は即座に反映する。
+		# 長さ 0 の Tween は張らない。
+		_model.rotation.x = deg_to_rad(angle_deg)
+		return
 	_down_tween = create_tween()
 	_down_tween.tween_property(_model, "rotation:x", deg_to_rad(angle_deg), duration) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(ease_type)

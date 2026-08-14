@@ -60,6 +60,8 @@ res://
 
 `Hitbox` は layer=6 / mask=7。`Hurtbox` は layer=7 / mask=6。本体のCollisionShapeとは別に持たせる。
 
+Hurtbox は陣営に関係なく同じレイヤーに乗るため、誰の攻撃も誰にでも当たる。当てたくない相手は `Hitbox.ignore_groups`（グループ名の配列）で除外する。犯人は `["robber"]` を指定し、味方を殴って `RunState.robbers_downed` が勝手に増える（＝幕が進む）事故を防ぐ。客への攻撃規則は §6.4 のロックオン必須ルールで別途扱う。
+
 ## 3. グローバル型定義
 
 `autoload/game_types.gd`
@@ -294,7 +296,11 @@ func _disable_hitbox() -> void:
 
 - `hurt_knockback_decay` 秒のあいだ移動入力・攻撃入力を受け付けない（被弾ロック）。一方的な連打で押し切られないための下限
 - VRM のマテリアルは触らない。被弾の提示はカメラシェイクで行う（`hurt_shake_strength`）
-- HP が尽きたら `player_downed` シグナルを出して入力を止めるだけ。ゲームオーバー画面・リスタートは `tasks.md` に項目が無いため未実装
+- HP が尽きたら倒れ、`down_duration` 秒後に自力で立ち上がる（`player_downed` → `player_recovered`）。**ゲームオーバーは作らない。失うのは時間だけ**
+    - 倒れている間は `Health` がダメージを弾くため無敵。HP の全快は立ち上がり「完了時」に行う。立ち上がり中に全快させると、無敵が切れているのに入力が戻っていない一方的な被弾窓（`stand_up_time` 秒）ができる
+    - `down_duration` / `stand_up_time` に 0 を設定してもタイマー分岐から抜けられるようにしておく（抜け道が無いと、値の設定だけで「倒れたまま操作不能」が再発する）
+    - 倒れ込み・立ち上がりはモデルの傾きで表現する。ダウン用クリップを `AnimationTree` に繋ぐまでの暫定
+    - 倒れた時点で `MeleeHitbox` を閉じ、Call Method Track からの再有効化も弾く（クリップはダウン後も最後まで進むため、寝たまま殴れてしまう）
 
 ## 7. NPC共通
 

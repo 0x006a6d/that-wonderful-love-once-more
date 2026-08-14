@@ -28,7 +28,10 @@ var _current: int = NO_STATE
 var _time_in_state: float = 0.0
 ## 進入コールバックの中でさらに transition_to() が呼ばれた場合の再入防止。
 var _transitioning: bool = false
-var _pending: int = NO_STATE
+## 遷移中に届いた要求の待ち行列。force も一緒に運ばないと、退避経路を通った
+## 同ステート再進入（STAGGERED の滞在時間延長）が握り潰される。
+var _pending: Array[int] = []
+var _pending_force: Array[bool] = []
 
 
 ## ステートを登録する。未使用のフックは空の Callable のままでよい。
@@ -58,8 +61,9 @@ func transition_to(id: int, force: bool = false) -> void:
 	if id == _current and not force:
 		return
 	if _transitioning:
-		# 進入処理の途中から呼ばれた。現在の遷移を終えてから適用する。
-		_pending = id
+		# 進入処理の途中から呼ばれた。現在の遷移を終えてから順に適用する。
+		_pending.append(id)
+		_pending_force.append(force)
 		return
 
 	_transitioning = true
@@ -73,10 +77,10 @@ func transition_to(id: int, force: bool = false) -> void:
 	_transitioning = false
 	state_changed.emit(from, id)
 
-	if _pending != NO_STATE:
-		var next := _pending
-		_pending = NO_STATE
-		transition_to(next)
+	if not _pending.is_empty():
+		var next := _pending.pop_front() as int
+		var next_force := _pending_force.pop_front() as bool
+		transition_to(next, next_force)
 
 
 ## 所有者の _physics_process から呼ぶ。

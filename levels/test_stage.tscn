@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://levels/test_stage.gd" id="1_stage"]
 [ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://cdummy0nikeche01" path="res://actors/npc/dummy.tscn" id="3_dummy"]
-[ext_resource type="PackedScene" uid="uid://crobbr0nikeche01" path="res://actors/npc/robber.tscn" id="4_robber"]
+[ext_resource type="PackedScene" uid="uid://dkbj6jc7oqsmu" path="res://actors/npc/robber.tscn" id="4_robber"]
 
 [sub_resource type="Environment" id="Env_stage"]
 background_mode = 1

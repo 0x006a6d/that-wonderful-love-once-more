@@ -69,6 +69,8 @@ enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, DOWNED }
 @export_group("Reaction")
 ## 被弾でよろけている秒数。
 @export var stagger_duration: float = 0.45
+## 足を止めるときの減速度（m/s²）。攻撃の予備動作・硬直・よろけで使う。
+@export var stop_decel: float = 20.0
 ## ノックバックの初速（m/s）。
 @export var knockback_speed: float = 3.0
 ## ノックバックが減衰しきるまでの秒数。
@@ -401,17 +403,27 @@ func receive_knockback(direction: Vector3, strength: float) -> void:
 	_knockback_timer = knockback_decay
 
 
+## 被弾フラッシュ。白 → ステート色へ戻す。
+##
+## 戻り先を tween_property で固定しない理由が2つある。
+## 1. 生成時点の色を捕まえると、コンボの2発目以降が「フラッシュ途中の白っぽい色」を
+##    戻り先として記録し、殴るほど白へ寄って元の色に戻らなくなる
+## 2. 被弾の処理順は receive_knockback → flash_hit() → take_hit() であり、
+##    take_hit() が同じコールスタックで staggered → STAGGERED 進入 → _set_color()
+##    まで走る。生成時の戻り先を固定すると、直後に決まるステート色と食い違う
+## そのため毎フレーム `_state_color` を読んで混ぜる方式にする（t=0 で必ずステート色）。
 func flash_hit() -> void:
 	if _material == null:
 		return
-	# 戻り先は「現在の色」ではなくステート色。現在の色を捕まえると、コンボの
-	# 2発目以降が「フラッシュ途中の白っぽい色」を戻り先として記録してしまい、
-	# 殴るほど白へ寄って戻らなくなる。
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
-	_material.albedo_color = flash_color
 	_flash_tween = create_tween()
-	_flash_tween.tween_property(_material, "albedo_color", _state_color, flash_duration)
+	_flash_tween.tween_method(_apply_flash_mix, 1.0, 0.0, flash_duration)
+
+
+func _apply_flash_mix(amount: float) -> void:
+	if _material != null:
+		_material.albedo_color = _state_color.lerp(flash_color, amount)
 
 
 # --- 内部ヘルパ -------------------------------------------------------------
@@ -507,7 +519,7 @@ func _face_direction(direction: Vector3, delta: float) -> void:
 
 func _stop_horizontal(delta: float) -> void:
 	var horizontal := Vector2(velocity.x, velocity.z)
-	horizontal = horizontal.move_toward(Vector2.ZERO, 20.0 * delta)
+	horizontal = horizontal.move_toward(Vector2.ZERO, stop_decel * delta)
 	velocity.x = horizontal.x
 	velocity.z = horizontal.y
 
@@ -538,11 +550,14 @@ func _close_hitbox() -> void:
 		_hitbox.deactivate_deferred()
 
 
-## ステート色を設定する。被弾フラッシュ中なら、そのフラッシュは打ち切る
-## （フラッシュの戻り先は常に最新のステート色にする）。
+## ステート色を設定する。フラッシュ中はマテリアルへ直接書かない
+## （flash_hit の混ぜ込みが毎フレーム `_state_color` を読むため、そのまま
+## 新しいステート色へ収束する）。ここでフラッシュを打ち切ると、被弾と同時に
+## STAGGERED へ入る経路で白が1フレームも描画されない。
 func _set_color(color: Color) -> void:
 	_state_color = color
+	if _material == null:
+		return
 	if _flash_tween != null and _flash_tween.is_valid():
-		_flash_tween.kill()
-	if _material != null:
-		_material.albedo_color = color
+		return
+	_material.albedo_color = color

@@ -45,6 +45,8 @@ var _act_on_alert: int = -1
 var _min_distance: float = 1e9
 var _player_hp_min: float = 1e9
 var _player_pushed: float = 0.0
+## 被弾フラッシュがステート色からどれだけ離れたかの最大値。
+var _flash_peak: float = 0.0
 
 var _patrol_start: Vector3 = Vector3.ZERO
 var _player_hold: Vector3 = Vector3.ZERO
@@ -183,6 +185,7 @@ func _phase_attack() -> void:
 ## 検証の主題は犯人側の反応なので、プレイヤーは殴られても倒れないよう回復させる。
 func _phase_fight() -> void:
 	_player_health.revive()
+	_sample_flash()
 	if bool(_robber_health.is_downed()):
 		_evaluate()
 		return
@@ -201,6 +204,19 @@ func _phase_fight() -> void:
 		_melee.call("attack")
 	elif state == "melee_1" or state == "melee_2":
 		_melee.call("attack")
+
+
+## 被弾フラッシュが実際に描画されているかを見る。ステート色からどれだけ
+## 離れたかの最大値を取る。被弾と同時に STAGGERED へ入る経路でフラッシュが
+## 打ち切られると、この値がほぼ 0 になる。
+func _sample_flash() -> void:
+	var material := _robber.get("_material") as StandardMaterial3D
+	if material == null:
+		return
+	var state_color := _robber.get("_state_color") as Color
+	var c := material.albedo_color
+	var diff := Vector3(c.r - state_color.r, c.g - state_color.g, c.b - state_color.b).length()
+	_flash_peak = maxf(_flash_peak, diff)
 
 
 func _advance(phase: int) -> void:
@@ -227,6 +243,8 @@ func _evaluate() -> void:
 	_assert("犯人の攻撃でプレイヤーの HP が減った", _player_hp_min < _player_health.max_hp)
 	_assert("犯人の攻撃でプレイヤーがノックバックした", _player_pushed > 0.02)
 	_assert("殴り返すと犯人が STAGGERED に入った", _saw_staggered)
+	print("[result] 被弾フラッシュのピーク（ステート色からの距離）=%.3f" % _flash_peak)
+	_assert("被弾フラッシュが描画されている", _flash_peak > 0.15)
 	_assert("HP が尽きて DOWNED になった", _saw_downed and bool(_robber_health.is_downed()))
 	_assert("RunState に robber ダウンが記録された", RunState.robbers_downed >= 1)
 

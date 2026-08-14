@@ -52,9 +52,14 @@ func _post_import(scene: Node) -> Object:
 		push_warning("vrm_add_face_collider: Head コライダーグループが見つからない。スキップ")
 		return scene
 
-	# 再インポート時の二重追加防止（顔前面 = offset.z が正の球が既にあれば何もしない）。
+	# 再インポート時の二重追加防止。
+	# 判定はこのスクリプトが追加する球そのもの（bone / offset / radius / 球であること）
+	# と照合する。以前は「offset.z が正」で見ていたが、FACE_OFFSET は z = 0 のため
+	# 自分が追加した球に一度も一致せず、ガードとして機能していなかった。
 	for c in head_group.colliders:
-		if c.bone == "Head" and c.offset.z > 0.0001:
+		if c.bone == "Head" and not c.is_capsule \
+				and c.offset.is_equal_approx(FACE_OFFSET) \
+				and is_equal_approx(c.radius, FACE_RADIUS):
 			return scene
 
 	var face := VRMCollider.new()

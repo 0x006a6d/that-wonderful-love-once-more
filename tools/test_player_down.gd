@@ -46,6 +46,12 @@ var _hp_on_recover: float = -1.0
 var _tilt_on_recover: float = 999.0
 var _down_test_frame: int = -1
 var _recover_test_frame: int = -1
+## 秒数に 0 を設定した場合でも復帰するか（インスペクタで踏める永久ロックの検出）。
+var _zero_test_frame: int = -1
+var _zero_recovered: bool = false
+## 設定値は開始時に控える（後半で 0 に書き換えるため、評価時に読むとずれる）。
+var _configured_down: float = 0.0
+var _configured_stand: float = 0.0
 
 
 func _ready() -> void:
@@ -71,6 +77,8 @@ func _ready() -> void:
 	if _model == null or _health == null or _melee == null:
 		_fatal("Model / Health / PlayerMelee が見つからない")
 		return
+	_configured_down = float(_player.get("down_duration"))
+	_configured_stand = float(_player.get("stand_up_time"))
 	_player.connect("player_recovered", _on_recovered)
 
 
@@ -118,12 +126,29 @@ func _physics_process(_delta: float) -> void:
 		if bool(_melee.call("is_attacking")):
 			_attack_while_down = true
 
-	if _recover_test_frame > 0:
+	if _recover_test_frame > 0 and _zero_test_frame < 0:
 		if bool(_melee.call("is_attacking")):
 			_attack_after_recover = true
 		if _frames > _recover_test_frame + INPUT_WINDOW:
+			# 秒数を 0 に設定した状態でもう一度倒す。以前はここで
+			# どのタイマー分岐にも入らず、倒れたまま戻らなくなっていた。
+			_player.set("down_duration", 0.0)
+			_player.set("stand_up_time", 0.0)
+			_health.take_hit(_health.max_hp)
+			_zero_test_frame = _frames
+			print("[zero] down_duration=0 / stand_up_time=0 で再ダウンさせた frame=%d" % _frames)
+		return
+
+	if _zero_test_frame > 0:
+		if not bool(_player.call("is_downed")):
+			_zero_recovered = true
 			_evaluate()
 			return
+		if _frames > _zero_test_frame + 60:
+			print("[zero] 60 フレーム経っても復帰しない")
+			_evaluate()
+			return
+		return
 
 	if _frames >= MAX_FRAMES:
 		print("[timeout] frames=%d downed=%s" % [_frames, str(_player.call("is_downed"))])
@@ -151,18 +176,18 @@ func _evaluate() -> void:
 	if _down_frame > 0 and _recover_frame > 0:
 		down_to_recover = (_recover_frame - _down_frame) / 60.0
 	print("[result] ダウン fr=%d 復帰 fr=%d  倒れていた時間=%.2f 秒（設定値 %.2f + %.2f）" %
-		[_down_frame, _recover_frame, down_to_recover,
-		float(_player.get("down_duration")), float(_player.get("stand_up_time"))])
+		[_down_frame, _recover_frame, down_to_recover, _configured_down, _configured_stand])
 
 	_assert("殴られ続けると HP0 でダウンする", _down_frame > 0)
 	_assert("ダウン中は attack 入力が通らない", not _attack_while_down)
 	_assert("自力で立ち上がる（復帰シグナルが出る）", _recover_frame > 0)
-	var expected := float(_player.get("down_duration")) + float(_player.get("stand_up_time"))
+	var expected := _configured_down + _configured_stand
 	_assert("倒れていた時間が設定値どおり（±0.2秒）",
 		down_to_recover > 0.0 and absf(down_to_recover - expected) <= 0.2)
 	_assert("復帰時に HP が全快している", is_equal_approx(_hp_on_recover, _health.max_hp))
 	_assert("復帰時にモデルの傾きが戻っている", _tilt_on_recover < 1.0)
 	_assert("復帰後は attack 入力が通る", _attack_after_recover)
+	_assert("down_duration / stand_up_time が 0 でも復帰する", _zero_recovered)
 
 	print("=== 結果: PASS=%d FAIL=%d ===" % [_pass, _fail])
 	print("ALL PASS" if _fail == 0 else "HAS FAILURE")

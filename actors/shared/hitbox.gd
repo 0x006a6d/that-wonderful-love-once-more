@@ -17,6 +17,12 @@ class_name Hitbox
 ## この Hitbox を出している本体（ノックバック方向の起点）。攻撃者。
 @export var source_body_path: NodePath = ^".."
 
+## この Hitbox が当てない相手のグループ。犯人が味方の犯人を殴って
+## RunState.robbers_downed が勝手に増える（＝幕が進む）事故を防ぐ。
+## 客への攻撃規則（technical-spec §6.4 のロックオン必須）はここではなく
+## 8/22 の客実装で別途入れる。
+@export var ignore_groups: Array[StringName] = []
+
 var damage: float = 0.0
 var knockback: float = 0.0
 var lethal: bool = false
@@ -86,6 +92,9 @@ func _try_hit(area: Area3D) -> void:
 	var target := hurtbox.owner_body()
 	if target == null or target == _source_body:
 		return
+	for group in ignore_groups:
+		if target.is_in_group(group):
+			return
 	if _already_hit.has(target):
 		return
 	_already_hit.append(target)
