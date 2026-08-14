@@ -32,6 +32,18 @@ extends CharacterBody3D
 ## 被弾時のカメラシェイク強度（0.0-1.0）。VRM は色を変えられないため、
 ## 手応えの提示はカメラ側で行う。
 @export var hurt_shake_strength: float = 0.8
+
+@export_subgroup("Down")
+## 倒れてから立ち上がり始めるまでの秒数。倒れている間は無敵（Health が
+## ダウン中の take_hit を弾く）で、失うのは時間だけ。ENGAGEMENT → BREACH が
+## 時間で進むため、この遅れがそのまま「警察が近づく」代償になる。
+@export var down_duration: float = 3.0
+## 倒れ込みの角度（度）と所要秒数。ダウン用クリップを繋ぐまでの暫定表現で、
+## ダミー・犯人と同じくモデルを傾けるだけ。
+@export var down_fall_angle_deg: float = 80.0
+@export var down_fall_time: float = 0.35
+## 立ち上がりの所要秒数。この間もまだ入力は受け付けない。
+@export var stand_up_time: float = 0.45
 @export_group("")
 
 ## 命中時のヒットストップ時間（実時間・秒）。
@@ -48,8 +60,10 @@ extends CharacterBody3D
 @export var camera_shake_path: NodePath = ^"SpringArm3D/Camera3D/CameraShake"
 @export var health_path: NodePath = ^"Health"
 
-## HP が尽きた。ゲームオーバー処理・リスタートは後日（tasks.md にまだ無い）。
+## HP が尽きて倒れた。
 signal player_downed()
+## 倒れた状態から立ち上がりきった（HP は全快している）。
+signal player_recovered()
 
 var _camera_rig: Node3D = null
 var _model: Node3D = null
@@ -62,6 +76,12 @@ var _health: Health = null
 var _hurt_timer: float = 0.0
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _downed: bool = false
+## 倒れている残り秒数。0 になったら立ち上がりに入る。
+var _down_timer: float = 0.0
+## 立ち上がり動作の残り秒数。0 になったら操作が戻る。
+var _stand_up_timer: float = 0.0
+## 倒れ・立ち上がりの傾き用 Tween（多重発行を防ぐため保持する）。
+var _down_tween: Tween = null
 
 
 func _ready() -> void:
@@ -100,6 +120,8 @@ func _physics_process(delta: float) -> void:
 
 	if _hurt_timer > 0.0:
 		_hurt_timer = maxf(_hurt_timer - delta, 0.0)
+	if _downed:
+		_update_down(delta)
 
 	# 速度は目標値へ加減速で寄せる（即時切替をやめて慣性＝質量感を出す）。
 	var horizontal := Vector2(velocity.x, velocity.z)
@@ -194,12 +216,48 @@ func flash_hit() -> void:
 		_camera_shake.call("shake", hurt_shake_strength)
 
 
+## HP が尽きた。倒れて down_duration 秒後に自力で立ち上がる。
+## 失うのは時間だけで、ゲームオーバーは作らない（エンディング4分岐に
+## プレイヤー死亡が無いため。docs/tasks.md 8/17 の決定）。
 func _on_health_downed(_lethal: bool) -> void:
 	if _downed:
 		return
 	_downed = true
 	_hurt_timer = 0.0
+	_down_timer = down_duration
+	_stand_up_timer = 0.0
+	_tilt_model(down_fall_angle_deg, down_fall_time, Tween.EASE_IN)
 	player_downed.emit()
+
+
+## 倒れている間の時間管理。倒れ → 立ち上がり → 操作復帰の順に進む。
+func _update_down(delta: float) -> void:
+	if _down_timer > 0.0:
+		_down_timer = maxf(_down_timer - delta, 0.0)
+		if _down_timer <= 0.0:
+			# 立ち上がり開始。HP はここで全快させる。
+			if _health != null:
+				_health.revive()
+			_stand_up_timer = stand_up_time
+			_tilt_model(0.0, stand_up_time, Tween.EASE_OUT)
+		return
+
+	if _stand_up_timer > 0.0:
+		_stand_up_timer = maxf(_stand_up_timer - delta, 0.0)
+		if _stand_up_timer <= 0.0:
+			_downed = false
+			player_recovered.emit()
+
+
+## モデルを前傾させる／戻す。ダウン用クリップを繋ぐまでの暫定表現。
+func _tilt_model(angle_deg: float, duration: float, ease_type: Tween.EaseType) -> void:
+	if _model == null:
+		return
+	if _down_tween != null and _down_tween.is_valid():
+		_down_tween.kill()
+	_down_tween = create_tween()
+	_down_tween.tween_property(_model, "rotation:x", deg_to_rad(angle_deg), duration) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(ease_type)
 
 
 func is_downed() -> bool:

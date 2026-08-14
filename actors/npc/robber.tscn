@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://crobbr0nikeche01"]
+[gd_scene format=3 uid="uid://dkbj6jc7oqsmu"]
 
 [ext_resource type="Script" path="res://actors/npc/robber.gd" id="1_robber"]
 [ext_resource type="Script" path="res://actors/shared/health.gd" id="2_health"]

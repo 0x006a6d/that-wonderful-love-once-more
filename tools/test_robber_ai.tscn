@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://crobberai0test01"]
+[gd_scene format=3 uid="uid://djwbsjsnq28mu"]
 
 [ext_resource type="Script" path="res://tools/test_robber_ai.gd" id="1_test"]
 
