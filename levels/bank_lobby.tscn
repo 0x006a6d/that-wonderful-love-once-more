@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3 uid="uid://dbanklobby00001"]
+[gd_scene format=3 uid="uid://0x375jrcs2g7"]
 
 [ext_resource type="Script" path="res://levels/bank_lobby.gd" id="1_lobby"]
 [ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]

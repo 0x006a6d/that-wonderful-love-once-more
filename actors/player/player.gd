@@ -59,6 +59,8 @@ extends CharacterBody3D
 @export var hitbox_path: NodePath = ^"Model/MeleeHitbox"
 @export var camera_shake_path: NodePath = ^"SpringArm3D/Camera3D/CameraShake"
 @export var health_path: NodePath = ^"Health"
+@export var lock_on_path: NodePath = ^"LockOnDetector"
+@export var view_camera_path: NodePath = ^"SpringArm3D/Camera3D"
 
 ## HP が尽きて倒れた。
 signal player_downed()
@@ -71,6 +73,8 @@ var _melee: Node = null
 var _hitbox: Hitbox = null
 var _camera_shake: Node = null
 var _health: Health = null
+var _lock_on: LockOn = null
+var _view_camera: Camera3D = null
 
 ## 被弾ロックの残り時間（秒）。0 より大きい間は移動入力を受け付けない。
 var _hurt_timer: float = 0.0
@@ -91,6 +95,8 @@ func _ready() -> void:
 	_hitbox = get_node_or_null(hitbox_path) as Hitbox
 	_camera_shake = get_node_or_null(camera_shake_path)
 	_health = get_node_or_null(health_path) as Health
+	_lock_on = get_node_or_null(lock_on_path) as LockOn
+	_view_camera = get_node_or_null(view_camera_path) as Camera3D
 
 	if _hitbox != null:
 		_hitbox.hit_landed.connect(_on_hit_landed)
@@ -98,6 +104,26 @@ func _ready() -> void:
 		_melee.connect("stage_started", _on_stage_started)
 	if _health != null:
 		_health.downed.connect(_on_health_downed)
+	if _lock_on != null:
+		_lock_on.set_owner_body(self)
+		_lock_on.set_camera(_view_camera)
+		_lock_on.target_acquired.connect(_on_lock_on_target_acquired)
+		_lock_on.target_released.connect(_on_lock_on_target_released)
+
+
+## LockOnDetector から攻撃判定とカメラへ対象を配線する。
+func _on_lock_on_target_acquired(target: Node3D) -> void:
+	if _hitbox != null:
+		_hitbox.exempt_body = target
+	if _camera_rig != null and _camera_rig.has_method("set_lock_on_target"):
+		_camera_rig.call("set_lock_on_target", target)
+
+
+func _on_lock_on_target_released() -> void:
+	if _hitbox != null:
+		_hitbox.exempt_body = null
+	if _camera_rig != null and _camera_rig.has_method("set_lock_on_target"):
+		_camera_rig.call("set_lock_on_target", null)
 
 
 ## コンボの段開始で前方へ踏み込む（attack_brake が減衰を担う）。

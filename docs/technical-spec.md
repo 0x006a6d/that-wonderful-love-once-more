@@ -60,7 +60,7 @@ res://
 
 `Hitbox` は layer=6 / mask=7。`Hurtbox` は layer=7 / mask=6。本体のCollisionShapeとは別に持たせる。
 
-Hurtbox は陣営に関係なく同じレイヤーに乗るため、誰の攻撃も誰にでも当たる。当てたくない相手は `Hitbox.ignore_groups`（グループ名の配列）で除外する。`Hitbox` は既定で `["civilian"]`、犯人の近接は `["robber", "civilian"]` を指定する。これにより、味方を殴って `RunState.robbers_downed` が勝手に増える（＝幕が進む）事故と、近接で客を巻き込む事故を防ぐ。客への攻撃規則は §6.4 のロックオン必須ルールで別途扱う。
+Hurtbox は陣営に関係なく同じレイヤーに乗るため、誰の攻撃も誰にでも当たる。当てたくない相手は `Hitbox.ignore_groups`（グループ名の配列）で除外する。`Hitbox` は既定で `["civilian"]`、犯人の近接は `["robber", "civilian"]` を指定する。これにより、味方を殴って `RunState.robbers_downed` が勝手に増える（＝幕が進む）事故と、近接で客を巻き込む事故を防ぐ。プレイヤーの近接だけは、ロックオン対象を `Hitbox.exempt_body` に指定し、その本体に限って除外を無視する。客への攻撃規則は §6.4 で扱う。
 
 ## 3. グローバル型定義
 
@@ -233,7 +233,7 @@ Player (CharacterBody3D)
 │   └── Camera3D
 ├── MeleeHitbox (Area3D, disabled)
 ├── Hurtbox (Area3D)
-├── LockOnDetector (Area3D)
+├── LockOnDetector (Area3D)  # 犯人・客へのロックオンを実装済み
 └── MuzzlePoint (Marker3D)
 ```
 
@@ -245,9 +245,35 @@ Player (CharacterBody3D)
     - 自動追従: 移動している間、ヨーを「移動方向の背後」へ緩やかに補間する。停止中は現在角を維持
     - 手動オービット: `camera_left` / `camera_right` の押下中は入力強度で回転し、直後は自動追従を数秒抑制する（補間・回転速度・抑制時間は `@export`）
     - ピッチは固定の見下ろし微角度（`@export`）。上下操作は持たない
-    - ロックオン実装後は「ロックオン中は対象を画面に収める」ヨー制御を最優先に挟む
+    - ロックオン中は、ヨーをプレイヤーから対象へ向かう方向へ補間して対象を画面に収める。この制御は手動オービットと自動追従より優先する
     - マウス操作対応は将来のオプション（現状の入力マップに含まれない）
 - 銃モード時は `SpringArm3D` の `position` を肩越しにオフセットし、`Camera3D.fov` を狭める。切り替えは `Tween` で 0.2 秒補間する
+
+### 6.1.1 ロックオン
+
+`actors/player/lock_on.gd` を `LockOnDetector`（`Area3D`）へ付ける。layer=0 / mask=3（`robber`）+4（`civilian`）とし、球形範囲に入った犯人・客の両方を候補にする。候補は (1) `Health` を持ちダウンしていない、(2) カメラ前方との角度が許容範囲内、(3) world レイヤーへのレイが遮られていない、の順で絞る。残った候補からカメラ前方との角度が最小の本体を選び、同角なら近い本体を優先する。
+
+`lock_on`（Tab / R3）は押下ごとのトグル。`target_acquired(target)` / `target_released()` を `player.gd` が購読し、攻撃判定とカメラへ対象を注入する。ロックオンのロジック自体は `player.gd` に置かない。
+
+|`@export`|既定値|用途|
+|---|---:|---|
+|`lock_on_range`|12.0 m|候補検出球の半径|
+|`lock_on_fov_deg`|100.0°|カメラ前方から候補までの許容角度|
+|`target_aim_height`|0.8 m|角度・遮蔽レイが狙う本体原点からの高さ|
+|`lock_on_release_range`|16.0 m|距離による解除閾値。検出距離より広くしてヒステリシスを持たせる|
+|`lose_target_grace`|0.6 s|連続遮蔽を許容する時間|
+|`show_placeholder_marker`|`true`|暫定3Dマーカーの表示|
+|`marker_color`|`#FFC729`|暫定3Dマーカーの色|
+|`marker_size`|0.12 m|暫定3Dマーカー球の半径|
+|`marker_height`|2.1 m|暫定3Dマーカーの対象原点からの高さ|
+|`player_camera.gd: lock_follow_speed`|6.0|対象方向へヨーを補間する速度|
+
+|自動解除条件|理由・処理|
+|---|---|
+|対象の `Health.downed`|ダウン済みの相手へ攻撃意図を残さない|
+|対象との距離が `lock_on_release_range` を超える|検出距離とのヒステリシスを保ちながら追跡不能距離で切る|
+|world 遮蔽が `lose_target_grace` 秒連続する|柱の裏を一瞬横切る程度では切らない|
+|対象がツリーから消える|無効な参照と暫定表示を残さない|
 
 ### 6.2 戦闘ステート
 
@@ -288,7 +314,7 @@ func _disable_hitbox() -> void:
 
 さらに客の `Health` は `stagger_threshold` を持ち、規定回数（既定3回）に達するまでダウンしない。誤爆でエンディングが壊れることを防ぐ。
 
-現時点では `LockOnDetector` は未実装であり、プレイヤーの `MeleeHitbox` は常に `civilian` を除外する。このため、客に当たる近接攻撃は存在しない。8/22 にロックオンを実装した時点で「客をロックオン中のみ除外を解除する」方式へ置き換える。犯人の近接も客を除外し続け、客への攻撃は銃撃経路を使う。
+`LockOnDetector` は犯人と客の両方を対象にし、`lock_on` 入力を押すたびに取得／解除をトグルする。プレイヤーの `MeleeHitbox` は `ignore_groups = ["civilian"]` を維持したまま、現在のロックオン対象を `exempt_body` に指定する。`target == exempt_body` の場合だけ `ignore_groups` の除外を無視するため、ロックオン中の客本人にだけ近接が通り、周囲の別の客には通らない。配列を実行時に in-place 変更しないので、別インスタンスへ設定が波及しない。犯人の近接は `exempt_body` を使わず、`["robber", "civilian"]` の除外を維持する。ロックは対象のダウン、16.0 m 超への離脱、0.6秒の連続遮蔽、対象のツリー退出で自動解除する。
 
 銃の場合、`RayCast3D` の当たり先が `Faction.CIVILIAN` なら HUD のレティクル色を変更し、警告状態を明示する。
 
@@ -363,7 +389,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
 - **誤爆防止**は `Health.stagger_threshold = 3`。HPが先に0になっても3回目までは STAGGERED に留まり、一定時間後に直前の IDLE / PRONE へ戻る
 - **ダウン**は固定ポーズ。`Health.downed(lethal)` の値をそのまま `RunState.record_down(self, Faction.CIVILIAN, lethal)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
 - **致死判定は攻撃側**の `Hitbox.lethal` が持つ方式で確定。近接は `false`、銃撃は `true`。銃撃は未実装のため、現時点で実ゲーム内に `lethal = true` を設定する攻撃はない
-- **ロックオンは未実装**。`Hitbox.ignore_groups` によりプレイヤー・犯人いずれの近接も客を除外し、現時点では客に当たる近接攻撃は存在しない。8/22 にプレイヤー側を「客をロックオン中のみ通る」方式へ置き換える
+- **ロックオンを実装済み**。プレイヤーは犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。別の客と犯人側の近接は従来どおり `ignore_groups` で除外する
 - `_ready()` で `RunState.civilians_total` を直接加算する。ダウン数・死亡数は `RunState` の既存APIで記録する
 
 ## 9. 犯人（Robber）
@@ -651,6 +677,8 @@ M6 時点ではデバッグ用の文字表示のままでよい。本実装は M
 - レティクル（銃モード時。客に照準が合うと色変化）
 - ロックオンマーカー
 - タイムスタンプカード（各幕の頭に数秒間フェード表示）
+
+ロックオンマーカーの HUD 実装までは、`lock_on.gd` が対象頭上へ出す unshaded の暫定3Dマーカーで代用する。この表示は8/24の HUD 実装で置き換える。
 
 アクセントカラーは `RunState.deviation_changed` を購読し、ベース色 `#5A4C97` から色相を赤方向へシフトさせる。
 

@@ -19,9 +19,12 @@ class_name Hitbox
 
 ## この Hitbox が当てない相手のグループ。客は既定で除外する。
 ## 犯人の近接は robber も追加し、味方誤爆による幕進行を防ぐ。
-## プレイヤー側は 8/22 のロックオン実装時に「ロックオン中のみ客へ通る」
-## 方式へ置き換える。
+## プレイヤー側は exempt_body にロックオン対象を指定し、その本体だけ除外を無視する。
 @export var ignore_groups: Array[StringName] = [&"civilian"]
+
+## ignore_groups の例外。この本体だけは除外を無視して当てる。
+## ロックオン中の客へ近接を通すために使う（technical-spec §6.4）。
+var exempt_body: Node3D = null
 
 var damage: float = 0.0
 var knockback: float = 0.0
@@ -92,9 +95,10 @@ func _try_hit(area: Area3D) -> void:
 	var target := hurtbox.owner_body()
 	if target == null or target == _source_body:
 		return
-	for group in ignore_groups:
-		if target.is_in_group(group):
-			return
+	if target != exempt_body:
+		for group: StringName in ignore_groups:
+			if target.is_in_group(group):
+				return
 	if _already_hit.has(target):
 		return
 	_already_hit.append(target)

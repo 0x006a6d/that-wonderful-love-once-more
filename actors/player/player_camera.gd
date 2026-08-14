@@ -8,8 +8,9 @@ extends SpringArm3D
 ##   入力強度に応じて回転し、直後は自動追従を manual_suppress_time 秒抑制する
 ## - ピッチは固定（見下ろし微角度 pitch_angle）。上下操作は持たない
 ## - 移動方向は player.gd から set_move_direction() で毎フレーム注入される（直接参照なし）
+## - ロックオン中は player.gd から注入された対象へヨーを補間し、手動オービットと
+##   自動追従の両方より優先して対象を画面内に収める
 ##
-## TODO(ロックオン実装時): ロックオン中は「対象を画面に収める」ヨー制御を最優先に挟む。
 ## マウス操作対応は将来のオプション（現状の入力マップには含まれない）。
 
 ## SpringArm の腕の長さ（カメラ距離）。身長160cm 基準の三人称距離。
@@ -18,6 +19,8 @@ extends SpringArm3D
 @export var pitch_angle: float = -0.35
 ## 自動追従の補間速さ（大きいほど素早く背後に回り込む）。
 @export var follow_speed: float = 2.5
+## ロックオン対象方向へヨーを寄せる補間速度。
+@export var lock_follow_speed: float = 6.0
 ## 手動オービットの回転速度（rad/s、入力強度 1.0 のとき）。
 @export var orbit_speed: float = 2.8
 ## 手動オービット後に自動追従を抑制する時間（秒）。
@@ -37,6 +40,7 @@ extends SpringArm3D
 
 var _yaw: float = 0.0
 var _move_dir: Vector3 = Vector3.ZERO
+var _lock_on_target: Node3D = null
 var _suppress_timer: float = 0.0
 var _base_y: float = 0.0
 var _bob_tween: Tween = null
@@ -61,6 +65,11 @@ func set_move_direction(direction: Vector3) -> void:
 	_move_dir = direction
 
 
+## player.gd から注入されるロックオン対象。null で現在ヨーを保ったまま通常追従へ戻る。
+func set_lock_on_target(target: Node3D) -> void:
+	_lock_on_target = target
+
+
 ## 沈み → 復帰の小さな縦揺れ。強度 0 なら何もしない。
 func _start_bob() -> void:
 	if start_stop_bob <= 0.0:
@@ -76,23 +85,35 @@ func _start_bob() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _lock_on_target != null and (not is_instance_valid(_lock_on_target)
+			or not _lock_on_target.is_inside_tree()):
+		_lock_on_target = null
+
+	# ロックオンは手動オービット・自動追従より優先する。
+	if _lock_on_target != null:
+		var to_target := _lock_on_target.global_position - global_position
+		to_target.y = 0.0
+		if not to_target.is_zero_approx():
+			var desired := atan2(-to_target.x, -to_target.z)
+			_yaw = lerp_angle(_yaw, desired, 1.0 - exp(-lock_follow_speed * delta))
 	# 手動オービット（キー ±1.0 / スティックは倒し量が強度になる）。
-	var axis := Input.get_axis("camera_left", "camera_right")
-	if absf(axis) > orbit_deadzone:
-		_yaw -= axis * orbit_speed * delta
-		_suppress_timer = manual_suppress_time
-	elif _suppress_timer > 0.0:
-		_suppress_timer -= delta
-	elif _move_dir.length() > 0.1:
-		# 自動追従: カメラの視線 (-Z) が移動方向と一致するヨーへ補間。
-		# 追従の強さは移動方向の前方成分 (視線との内積) に比例させ、
-		# 後退・真横では追従しない (回り込み続け・永久旋回の防止)。
-		var look := -global_transform.basis.z
-		look.y = 0.0
-		var fwd := _move_dir.normalized().dot(look.normalized())
-		if fwd > follow_forward_min:
-			var desired := atan2(-_move_dir.x, -_move_dir.z)
-			_yaw = lerp_angle(_yaw, desired, 1.0 - exp(-follow_speed * fwd * delta))
+	else:
+		var axis := Input.get_axis("camera_left", "camera_right")
+		if absf(axis) > orbit_deadzone:
+			_yaw -= axis * orbit_speed * delta
+			_suppress_timer = manual_suppress_time
+		elif _suppress_timer > 0.0:
+			_suppress_timer -= delta
+		elif _move_dir.length() > 0.1:
+			# 自動追従: カメラの視線 (-Z) が移動方向と一致するヨーへ補間。
+			# 追従の強さは移動方向の前方成分 (視線との内積) に比例させ、
+			# 後退・真横では追従しない (回り込み続け・永久旋回の防止)。
+			var look := -global_transform.basis.z
+			look.y = 0.0
+			var fwd := _move_dir.normalized().dot(look.normalized())
+			if fwd > follow_forward_min:
+				var desired := atan2(-_move_dir.x, -_move_dir.z)
+				_yaw = lerp_angle(_yaw, desired, 1.0 - exp(-follow_speed * fwd * delta))
 
 	rotation.y = _yaw
 	rotation.x = pitch_angle

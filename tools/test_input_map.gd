@@ -1,16 +1,20 @@
-extends SceneTree
+extends Node
 
 ## 入力マップの検証。キーボードとパッド (PS5 DualSense / PS4 DualShock 4) の
 ## 両方が各アクションに登録されていることをヘッドレスで確認する。
 ## (実機のパッド動作確認は人間に委ねる。ここでは登録の有無のみ)
 ##
-## 実行: godot --path . --headless --script res://tools/test_input_map.gd
+## 実行: godot --path . --headless res://tools/test_input_map.tscn
 
 var _pass: int = 0
 var _fail: int = 0
 
 
-func _init() -> void:
+func _ready() -> void:
+	call_deferred("_run")
+
+
+func _run() -> void:
 	print("=== 入力マップ 検証開始 ===")
 	InputMap.load_from_project_settings()
 
@@ -41,7 +45,7 @@ func _init() -> void:
 
 	print("=== 結果: PASS=%d FAIL=%d ===" % [_pass, _fail])
 	print("ALL PASS" if _fail == 0 else "HAS FAILURE")
-	quit(0 if _fail == 0 else 1)
+	get_tree().quit(0 if _fail == 0 else 1)
 
 
 func _check(action: String, keys: Array, buttons: Array, axes: Array) -> void:
