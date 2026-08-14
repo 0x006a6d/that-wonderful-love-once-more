@@ -115,7 +115,3 @@ interact={
 3d_physics/layer_6="hitbox"
 3d_physics/layer_7="hurtbox"
 3d_physics/layer_8="cover"
-
-[rendering]
-
-renderer/rendering_method="forward_plus"
