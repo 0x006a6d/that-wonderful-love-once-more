@@ -1,0 +1,401 @@
+[gd_scene load_steps=28 format=3 uid="uid://dbanklobby00001"]
+
+[ext_resource type="Script" path="res://levels/bank_lobby.gd" id="1_lobby"]
+[ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://dkbj6jc7oqsmu" path="res://actors/npc/robber.tscn" id="3_robber"]
+
+[sub_resource type="Environment" id="Env_lobby"]
+background_mode = 1
+background_color = Color(0.09, 0.1, 0.13, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.56, 0.62, 1)
+ambient_light_energy = 0.5
+tonemap_mode = 2
+
+[sub_resource type="BoxShape3D" id="Box_floor"]
+size = Vector3(26, 0.5, 20)
+
+[sub_resource type="BoxMesh" id="Mesh_floor"]
+size = Vector3(26, 0.5, 20)
+
+[sub_resource type="StandardMaterial3D" id="Mat_floor"]
+albedo_color = Color(0.3, 0.32, 0.36, 1)
+roughness = 0.65
+
+[sub_resource type="BoxShape3D" id="Box_wall_north"]
+size = Vector3(26, 4, 0.4)
+
+[sub_resource type="BoxMesh" id="Mesh_wall_north"]
+size = Vector3(26, 4, 0.4)
+
+[sub_resource type="BoxShape3D" id="Box_wall_side"]
+size = Vector3(0.4, 4, 20)
+
+[sub_resource type="BoxMesh" id="Mesh_wall_side"]
+size = Vector3(0.4, 4, 20)
+
+[sub_resource type="BoxShape3D" id="Box_wall_south"]
+size = Vector3(11, 4, 0.4)
+
+[sub_resource type="BoxMesh" id="Mesh_wall_south"]
+size = Vector3(11, 4, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="Mat_wall"]
+albedo_color = Color(0.24, 0.25, 0.29, 1)
+
+[sub_resource type="StandardMaterial3D" id="Mat_glass"]
+transparency = 1
+albedo_color = Color(0.34, 0.48, 0.58, 0.35)
+roughness = 0.2
+
+[sub_resource type="BoxShape3D" id="Box_counter"]
+size = Vector3(14, 1.1, 0.9)
+
+[sub_resource type="BoxMesh" id="Mesh_counter"]
+size = Vector3(14, 1.1, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="Mat_counter"]
+albedo_color = Color(0.38, 0.3, 0.25, 1)
+
+[sub_resource type="BoxShape3D" id="Box_pillar"]
+size = Vector3(0.9, 4, 0.9)
+
+[sub_resource type="BoxMesh" id="Mesh_pillar"]
+size = Vector3(0.9, 4, 0.9)
+
+[sub_resource type="StandardMaterial3D" id="Mat_pillar"]
+albedo_color = Color(0.43, 0.4, 0.47, 1)
+
+[sub_resource type="BoxShape3D" id="Box_atm"]
+size = Vector3(0.8, 1.9, 0.7)
+
+[sub_resource type="BoxMesh" id="Mesh_atm"]
+size = Vector3(0.8, 1.9, 0.7)
+
+[sub_resource type="StandardMaterial3D" id="Mat_atm"]
+albedo_color = Color(0.19, 0.32, 0.39, 1)
+
+[sub_resource type="BoxShape3D" id="Box_vault"]
+size = Vector3(2.4, 2.6, 0.3)
+
+[sub_resource type="BoxMesh" id="Mesh_vault"]
+size = Vector3(2.4, 2.6, 0.3)
+
+[sub_resource type="StandardMaterial3D" id="Mat_vault"]
+albedo_color = Color(0.3, 0.34, 0.36, 1)
+metallic = 0.75
+roughness = 0.32
+
+[node name="BankLobby" type="Node3D"]
+script = ExtResource("1_lobby")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.321394, 0.383022, 0, 0.766044, 0.642788, -0.5, -0.55667, 0.663414, 0, 6, 8)
+light_energy = 1.15
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_lobby")
+
+[node name="Floor" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("Box_floor")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("Mesh_floor")
+surface_material_override/0 = SubResource("Mat_floor")
+
+[node name="WallNorth" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -10)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallNorth"]
+shape = SubResource("Box_wall_north")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallNorth"]
+mesh = SubResource("Mesh_wall_north")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallEast" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, 2, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallEast"]
+shape = SubResource("Box_wall_side")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallEast"]
+mesh = SubResource("Mesh_wall_side")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallWest" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13, 2, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallWest"]
+shape = SubResource("Box_wall_side")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallWest"]
+mesh = SubResource("Mesh_wall_side")
+surface_material_override/0 = SubResource("Mat_wall")
+
+[node name="WallSouthWest" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.5, 2, 10)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouthWest"]
+shape = SubResource("Box_wall_south")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallSouthWest"]
+mesh = SubResource("Mesh_wall_south")
+surface_material_override/0 = SubResource("Mat_glass")
+
+[node name="WallSouthEast" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.5, 2, 10)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WallSouthEast"]
+shape = SubResource("Box_wall_south")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="WallSouthEast"]
+mesh = SubResource("Mesh_wall_south")
+surface_material_override/0 = SubResource("Mat_glass")
+
+[node name="TellerCounter" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.55, -6)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="TellerCounter"]
+shape = SubResource("Box_counter")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="TellerCounter"]
+mesh = SubResource("Mesh_counter")
+surface_material_override/0 = SubResource("Mat_counter")
+
+[node name="PillarA" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 2, -2)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PillarA"]
+shape = SubResource("Box_pillar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PillarA"]
+mesh = SubResource("Mesh_pillar")
+surface_material_override/0 = SubResource("Mat_pillar")
+
+[node name="PillarB" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -2)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PillarB"]
+shape = SubResource("Box_pillar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PillarB"]
+mesh = SubResource("Mesh_pillar")
+surface_material_override/0 = SubResource("Mat_pillar")
+
+[node name="PillarC" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2, -2)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PillarC"]
+shape = SubResource("Box_pillar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PillarC"]
+mesh = SubResource("Mesh_pillar")
+surface_material_override/0 = SubResource("Mat_pillar")
+
+[node name="PillarD" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 2, 4)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PillarD"]
+shape = SubResource("Box_pillar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PillarD"]
+mesh = SubResource("Mesh_pillar")
+surface_material_override/0 = SubResource("Mat_pillar")
+
+[node name="PillarE" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 4)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PillarE"]
+shape = SubResource("Box_pillar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PillarE"]
+mesh = SubResource("Mesh_pillar")
+surface_material_override/0 = SubResource("Mat_pillar")
+
+[node name="PillarF" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2, 4)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PillarF"]
+shape = SubResource("Box_pillar")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PillarF"]
+mesh = SubResource("Mesh_pillar")
+surface_material_override/0 = SubResource("Mat_pillar")
+
+[node name="AtmA" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.2, 0.95, -2)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AtmA"]
+shape = SubResource("Box_atm")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="AtmA"]
+mesh = SubResource("Mesh_atm")
+surface_material_override/0 = SubResource("Mat_atm")
+
+[node name="AtmB" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.2, 0.95, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AtmB"]
+shape = SubResource("Box_atm")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="AtmB"]
+mesh = SubResource("Mesh_atm")
+surface_material_override/0 = SubResource("Mat_atm")
+
+[node name="AtmC" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12.2, 0.95, 2)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="AtmC"]
+shape = SubResource("Box_atm")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="AtmC"]
+mesh = SubResource("Mesh_atm")
+surface_material_override/0 = SubResource("Mat_atm")
+
+[node name="VaultDoor" type="StaticBody3D" parent="." groups=["nav_source"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 1.3, -9.7)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="VaultDoor"]
+shape = SubResource("Box_vault")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="VaultDoor"]
+mesh = SubResource("Mesh_vault")
+surface_material_override/0 = SubResource("Mat_vault")
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+
+[node name="Cover_PillarA_N" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -3.15)
+
+[node name="Cover_PillarA_S" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -0.85)
+
+[node name="Cover_PillarB_N" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -3.15)
+
+[node name="Cover_PillarB_S" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -0.85)
+
+[node name="Cover_PillarC_N" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.2, -3.15)
+
+[node name="Cover_PillarC_S" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.2, -0.85)
+
+[node name="Cover_PillarD_N" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, 2.85)
+
+[node name="Cover_PillarD_S" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, 5.15)
+
+[node name="Cover_PillarE_N" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 2.85)
+
+[node name="Cover_PillarE_S" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 5.15)
+
+[node name="Cover_PillarF_N" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.2, 2.85)
+
+[node name="Cover_PillarF_S" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.2, 5.15)
+
+[node name="Cover_TellerCounter_N1" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -7.15)
+
+[node name="Cover_TellerCounter_N2" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0.2, -7.15)
+
+[node name="Cover_TellerCounter_N3" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0.2, -7.15)
+
+[node name="Cover_Atm_E" type="Marker3D" parent="." groups=["cover"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.1, 0.2, 0)
+
+[node name="Patrol_NorthWest" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.2, -4)
+
+[node name="Patrol_NorthEast" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.2, -4)
+
+[node name="Patrol_SouthEast" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.2, 5)
+
+[node name="Patrol_SouthWest" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.2, 5)
+
+[node name="PlayerSpawn" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 8)
+
+[node name="RobberSpawn1" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.2, -4)
+
+[node name="RobberSpawn2" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 1)
+
+[node name="RobberSpawn3" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, -4)
+
+[node name="CivilianSpawn1" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.2, 7)
+
+[node name="CivilianSpawn2" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.2, 7)
+
+[node name="CivilianSpawn3" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.2, 6)
+
+[node name="CivilianSpawn4" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.2, 6)
+
+[node name="CivilianSpawn5" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, 7)
+
+[node name="CivilianSpawn6" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.2, 2)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 8)
+
+[node name="Robber1" parent="." instance=ExtResource("3_robber")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.2, -4)
+patrol_points = Array[NodePath]([NodePath("../Patrol_NorthWest"), NodePath("../Patrol_NorthEast"), NodePath("../Patrol_SouthEast"), NodePath("../Patrol_SouthWest")])

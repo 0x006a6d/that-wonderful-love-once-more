@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://dtestbanklobby1"]
+
+[ext_resource type="Script" path="res://tools/test_bank_lobby.gd" id="1_test"]
+
+[node name="TestBankLobby" type="Node"]
+script = ExtResource("1_test")

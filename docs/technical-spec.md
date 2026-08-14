@@ -56,7 +56,7 @@ res://
 |5|`police`|警官本体|
 |6|`hitbox`|攻撃判定（`Area3D`）|
 |7|`hurtbox`|被弾判定（`Area3D`）|
-|8|`cover`|遮蔽物マーカー|
+|8|`cover`|遮蔽物マーカー用（実際の `Marker3D` はグループ `cover` で表現）|
 
 `Hitbox` は layer=6 / mask=7。`Hurtbox` は layer=7 / mask=6。本体のCollisionShapeとは別に持たせる。
 
@@ -361,8 +361,10 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 |役割|追加ステート|挙動|
 |---|---|---|
 |`leader.gd`|`SHIELD`|最寄りの客を掴んで盾にする。盾状態のとき、プレイヤーの射線が盾越しなら弾は客に当たる。接近して `GRAPPLE` されると解除|
-|`gunner.gd`|`COVER`|`cover` レイヤーの `Marker3D` から、プレイヤーへの射線が通る位置を選んで移動する|
+|`gunner.gd`|`COVER`|グループ `cover` の `Marker3D` から、プレイヤーへの射線が通る位置を選んで移動する|
 |`erratic.gd`|—|`shoot_civilian_interval` 秒ごとに、最寄りの客を撃つ。放置するとエンディングが悪化する|
+
+遮蔽点は物理レイヤーではなくグループ `cover` で検索する。`Marker3D` は `CollisionObject3D` ではなく、物理レイヤーに乗らないため。
 
 #### 共通挙動の実装状況（8/17）
 
@@ -382,7 +384,56 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 
 #### ナビメッシュのベイク
 
-仮ステージ（`levels/test_stage.gd`）は実行時に同期ベイクする。`nav_source` グループのノード（床・壁・柱）からジオメトリを集める方式で、エディタ操作を人間に渡さずに済ませるため。`cell_size` はプロジェクト設定の既定ナビゲーションマップ（0.25）と一致させる（食い違うとエッジのラスタライズ警告が出る）。銀行ロビー（8/18〜）では事前ベイク済みの `NavigationMesh` リソースへ移す。
+仮ステージと銀行ロビーは実行時に同期ベイクする。処理は `levels/level_root.gd` の `LevelRoot` に共通化し、各レベルのルートスクリプトはこれを継承する。`nav_source` グループのノード（床・壁・柱・什器）からジオメトリを集める方式。`cell_size` はプロジェクト設定の既定ナビゲーションマップ（0.25）と一致させる（食い違うとエッジのラスタライズ警告が出る）。
+
+銀行ロビーも事前ベイク済みリソースへは移さない。エディタでのベイク操作を人間に渡さず、シーン生成から経路確認までヘッドレス検証可能な状態を維持するため。
+
+#### 銀行ロビーのレイアウト（8/18〜8/21）
+
+`levels/bank_lobby.tscn`。-Z が北、床上面が y=0。寸法の表記は X × Y × Z（m）。床・壁・柱・什器は `StaticBody3D` とし、layer=1 / mask=0、グループ `nav_source` に入れる。
+
+俯瞰図は `docs/img/bank_lobby_top.png`（北が上）。`tools/capture_lobby.tscn` をウィンドウありで実行すると再生成できる。マーカーは赤＝遮蔽点、黄＝巡回点、青＝プレイヤー、橙＝犯人、白＝客。レイアウトを変更したら撮り直して差し替える。
+
+![銀行ロビー俯瞰図](img/bank_lobby_top.png)
+
+|ノード|寸法|中心座標 (x, y, z)|備考|
+|---|---|---|---|
+|`Floor`|26 × 0.5 × 20|(0, -0.25, 0)|範囲 X=-13〜13、Z=-10〜10|
+|`WallNorth`|26 × 4 × 0.4|(0, 2, -10)|北壁|
+|`WallEast` / `WallWest`|0.4 × 4 × 20|(13, 2, 0) / (-13, 2, 0)|東西壁|
+|`WallSouthWest` / `WallSouthEast`|11 × 4 × 0.4|(-7.5, 2, 10) / (7.5, 2, 10)|中央 X=-2〜2 が入口。半透明の青灰ガラス|
+|`TellerCounter`|14 × 1.1 × 0.9|(-1, 0.55, -6)|X=-8〜6|
+|`PillarA` / `PillarB` / `PillarC`|0.9 × 4 × 0.9|(-6, 2, -2) / (0, 2, -2) / (6, 2, -2)|北側の柱列|
+|`PillarD` / `PillarE` / `PillarF`|0.9 × 4 × 0.9|(-6, 2, 4) / (0, 2, 4) / (6, 2, 4)|南側の柱列|
+|`AtmA` / `AtmB` / `AtmC`|0.8 × 1.9 × 0.7|(-12.2, 0.95, -2) / (-12.2, 0.95, 0) / (-12.2, 0.95, 2)|西壁沿い|
+|`VaultDoor`|2.4 × 2.6 × 0.3|(9, 1.3, -9.7)|北壁の東寄り|
+
+マーカーの y はすべて 0.2。遮蔽点は遮蔽物の表面から 0.7m 離し、グループ `cover` に入れる。合計16点。
+
+|マーカー|座標 (x, y, z)|命名規約・用途|
+|---|---|---|
+|`Cover_PillarA_N`〜`Cover_PillarF_N`|各柱中心の (x, 0.2, z-1.15)|柱の北側|
+|`Cover_PillarA_S`〜`Cover_PillarF_S`|各柱中心の (x, 0.2, z+1.15)|柱の南側|
+|`Cover_TellerCounter_N1`|(-6, 0.2, -7.15)|カウンター従業員側|
+|`Cover_TellerCounter_N2`|(-1, 0.2, -7.15)|カウンター従業員側（中央）|
+|`Cover_TellerCounter_N3`|(4, 0.2, -7.15)|カウンター従業員側|
+|`Cover_Atm_E`|(-11.1, 0.2, 0)|ATM列の東側|
+
+巡回点は `Patrol_*`、配置予定地点は `<役割>Spawn<連番>` とする。
+
+|マーカー|座標 (x, y, z)|
+|---|---|
+|`Patrol_NorthWest`|(-9, 0.2, -4)|
+|`Patrol_NorthEast`|(9, 0.2, -4)|
+|`Patrol_SouthEast`|(9, 0.2, 5)|
+|`Patrol_SouthWest`|(-9, 0.2, 5)|
+|`PlayerSpawn`|(0, 0.2, 8)|
+|`RobberSpawn1` / `RobberSpawn2` / `RobberSpawn3`|(-8, 0.2, -4) / (0, 0.2, 1) / (8, 0.2, -4)|
+|`CivilianSpawn1` / `CivilianSpawn2`|(-9, 0.2, 7) / (-5, 0.2, 7)|
+|`CivilianSpawn3` / `CivilianSpawn4`|(-2, 0.2, 6) / (3, 0.2, 6)|
+|`CivilianSpawn5` / `CivilianSpawn6`|(8, 0.2, 7) / (10, 0.2, 2)|
+
+`Player` は `PlayerSpawn`、`Robber1` は `RobberSpawn1` と同じ座標に置く。`Robber1.patrol_points` には4個の `Patrol_*` を北西→北東→南東→南西の順で渡す。客と残り2体の犯人はこの段階ではインスタンス化しない。
 
 ## 10. 警察（Police）
 
