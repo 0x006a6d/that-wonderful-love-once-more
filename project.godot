@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="あの素晴しい「愛」をもう一度"
+config/name="セブンティーン"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]

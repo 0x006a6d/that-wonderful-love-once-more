@@ -86,3 +86,10 @@ Mixamo で各モーションを検索・ダウンロードする際の検索名�
 - 内容: 各 FBX に 1 アニメ (Godot ufbx が sanitize し `mixamo_com` 名)。長さは 0.60s (Hit Reaction) 〜 4.40s (Dying)。右ストレート用に Cross_Punch を採用 (数値 QC 済)、他は被弾・回避・ダウン・銃・キック・コンボ素材として導入。全 29 本が同一の 65 ボーンスケルトン (Without Skin) で、`mixamo_bone_map.tres` 1 つでリターゲットする。
 - スケルトン命名: Mixamo 命名だが Godot 4.7 の ufbx インポータがコロンを sanitize するため、インポート後のボーン名は `mixamorig4_Hips` 等 (元は `mixamorig:Hips`)。BoneMap (`assets/motions/mixamo_bone_map.tres`) はこの sanitize 後の名前でエイリアスを張っている。
 - 公開時の注意: 上記のとおり Mixamo 由来 FBX の生ファイルは単体再配布不可。**このリポジトリを一般公開する場合、`assets/motions/mixamo_*.fbx` の生ファイルをそのまま含めてよいかはライセンス上の要注意事項**であり、公開前に FBX を除外する / 別途権利処理する等の判断が要る。
+
+## 取得予定（未取得）
+
+方針は `docs/game-design.md` §7.1。着手は 8/24 以降のため、以下はまだ取得していない。**取得した時点で、上記と同じ粒度（ファイル名・取得元・ライセンス根拠・取得日・内容）で本ファイルに追記すること。**
+
+- 犯人3体・客2〜3種のキャラクターモデル: Mixamo（With Skin）。ライセンスの扱いは上記モーションと同じ（組み込み配布可・単体再配布不可）。
+- 什器モデル: Kenney Furniture Kit（Kenney、CC0、glTF）。
