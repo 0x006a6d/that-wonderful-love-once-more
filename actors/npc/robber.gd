@@ -109,7 +109,9 @@ var _agent: NavigationAgent3D = null
 var _sm: StateMachine = null
 
 var _target: Node3D = null
-var _home_position: Vector3 = Vector3.ZERO
+## 現在のステート色。被弾フラッシュの戻り先。
+var _state_color: Color = Color.WHITE
+var _flash_tween: Tween = null
 var _patrol_index: int = 0
 var _patrol_wait_left: float = 0.0
 var _lost_sight_for: float = 0.0
@@ -129,8 +131,6 @@ func _ready() -> void:
 	_agent = get_node_or_null(agent_path) as NavigationAgent3D
 	_sm = get_node_or_null(state_machine_path) as StateMachine
 
-	_home_position = global_position
-
 	if _mesh != null:
 		# 個体ごとに独立した色変化にするためマテリアルを複製する。
 		var base := _mesh.get_active_material(0)
@@ -139,7 +139,8 @@ func _ready() -> void:
 		else:
 			_material = StandardMaterial3D.new()
 		_mesh.material_override = _material
-		_material.albedo_color = color_idle
+		_state_color = color_idle
+		_material.albedo_color = _state_color
 
 	if _health != null:
 		_health.staggered.connect(_on_staggered)
@@ -275,8 +276,10 @@ func _physics_chase(delta: float) -> void:
 		_sm.transition_to(State.ATTACK)
 		return
 
-	if distance <= attack_range * 0.8:
-		# 射程内だがクールダウン中。踏み込まず間合いを保つ。
+	if _cooldown_left > 0.0 and distance <= attack_keep_range:
+		# 射程付近でクールダウン中。これ以上踏み込まず間合いを保つ。
+		# クールダウン明けは踏み込ませる（ここで距離を見ないと attack_range まで
+		# 詰めずに attack_keep_range で足を止め、永久に殴ってこなくなる）。
 		_stop_horizontal(delta)
 		_face_position(_target.global_position, delta)
 		return
@@ -401,10 +404,14 @@ func receive_knockback(direction: Vector3, strength: float) -> void:
 func flash_hit() -> void:
 	if _material == null:
 		return
-	var restore := _material.albedo_color
+	# 戻り先は「現在の色」ではなくステート色。現在の色を捕まえると、コンボの
+	# 2発目以降が「フラッシュ途中の白っぽい色」を戻り先として記録してしまい、
+	# 殴るほど白へ寄って戻らなくなる。
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
 	_material.albedo_color = flash_color
-	var tw := create_tween()
-	tw.tween_property(_material, "albedo_color", restore, flash_duration)
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_material, "albedo_color", _state_color, flash_duration)
 
 
 # --- 内部ヘルパ -------------------------------------------------------------
@@ -523,12 +530,19 @@ func _open_hitbox() -> void:
 	_hitbox.activate()
 
 
+## 判定を閉じる。よろけ・ダウンは被弾処理（信号）の最中に確定するため、
+## 常に deferred 版を使う（判定自体は即座に閉じる）。
 func _close_hitbox() -> void:
 	_hitbox_open = false
 	if _hitbox != null:
-		_hitbox.deactivate()
+		_hitbox.deactivate_deferred()
 
 
+## ステート色を設定する。被弾フラッシュ中なら、そのフラッシュは打ち切る
+## （フラッシュの戻り先は常に最新のステート色にする）。
 func _set_color(color: Color) -> void:
+	_state_color = color
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
 	if _material != null:
 		_material.albedo_color = color

@@ -60,6 +60,16 @@ func deactivate() -> void:
 	monitoring = false
 
 
+## 被弾処理（area_entered → Hurtbox → Health → ダウン）の最中から無効化する場合に使う。
+## 信号の処理中に monitoring を直接書き換えると Godot が弾くため
+## （"Function blocked during in/out signal"）、フラグの反映だけ物理ステップの
+## 終わりへ回す。判定そのものは _active で即座に閉じるので、1 フレームぶん
+## monitoring が残っても命中はしない。
+func deactivate_deferred() -> void:
+	_active = false
+	set_deferred("monitoring", false)
+
+
 func source_body() -> Node3D:
 	return _source_body
 

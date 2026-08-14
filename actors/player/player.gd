@@ -174,8 +174,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## MeleeHitbox の Call Method Track から呼ばれる（有効化）。
+## 倒れている間は判定を出さない。ダウンした時点で再生中だったクリップは
+## そのまま最後まで進むため、ここで止めないと寝たまま殴れてしまう。
 func _enable_hitbox(damage: float, knockback: float) -> void:
-	if _hitbox == null:
+	if _hitbox == null or _downed:
 		return
 	_hitbox.configure(damage, knockback, false)
 	_hitbox.activate()
@@ -226,6 +228,9 @@ func _on_health_downed(_lethal: bool) -> void:
 	_hurt_timer = 0.0
 	_down_timer = down_duration
 	_stand_up_timer = 0.0
+	# 攻撃中に倒れた場合、開いたままの判定を閉じる。
+	if _hitbox != null:
+		_hitbox.deactivate_deferred()
 	_tilt_model(down_fall_angle_deg, down_fall_time, Tween.EASE_IN)
 	player_downed.emit()
 
