@@ -41,13 +41,23 @@ func fire_at(target_position: Vector3) -> Node3D:
 ## 発砲せず、同じレイ条件で target が射線の最初の Hurtbox かを調べる。
 ## 不安定型が遮蔽された客を狙って射撃間隔を消費しないために使う。
 func has_clear_shot(target: Node3D, target_position: Vector3) -> bool:
-	if target == null or global_position.distance_to(target_position) > max_range:
+	return has_clear_shot_from(global_position, target, target_position)
+
+
+## 任意の地点を銃口とみなし、同じレイ条件で target への射線を調べる。
+## 遮蔽候補へ移動する前に、その候補地点からの射線を評価するために使う。
+func has_clear_shot_from(from: Vector3, target: Node3D, target_position: Vector3) -> bool:
+	if target == null or from.distance_to(target_position) > max_range:
 		return false
-	return _body_from_hit(_cast_ray(target_position)) == target
+	return _body_from_hit(_cast_ray_from(from, target_position)) == target
 
 
 func _cast_ray(to: Vector3) -> Dictionary:
-	if not is_inside_tree() or global_position.is_equal_approx(to):
+	return _cast_ray_from(global_position, to)
+
+
+func _cast_ray_from(from: Vector3, to: Vector3) -> Dictionary:
+	if not is_inside_tree() or from.is_equal_approx(to):
 		return {}
 	var excluded: Array[RID] = []
 	var shooter := _shooter()
@@ -56,7 +66,7 @@ func _cast_ray(to: Vector3) -> Dictionary:
 	if shooter != null:
 		_append_hurtbox_exclusions(shooter, excluded)
 	var query := PhysicsRayQueryParameters3D.create(
-		global_position, to, WORLD_MASK | HURTBOX_MASK, excluded)
+		from, to, WORLD_MASK | HURTBOX_MASK, excluded)
 	query.collide_with_areas = true
 	query.collide_with_bodies = true
 	return get_world_3d().direct_space_state.intersect_ray(query)

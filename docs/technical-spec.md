@@ -377,7 +377,9 @@ func time_in_state() -> float
 
 レイのマスクは layer 1（`world`）と layer 7（`hurtbox`）の和で、`collide_with_areas = true` とする。射手本体と射手自身の Hurtbox は除外する。最初の交点だけを採用するため、壁が先ならダメージを与えず、Hurtbox が先なら `Hurtbox.receive_shot()` から `Health.take_hit(damage, lethal, ignore_stagger_threshold)` へ渡す。
 
-銃撃には `Hitbox.ignore_groups` を適用しない。不安定型が客を撃つ経路と、リーダーの盾越しに客へ当たる経路の両方で、射線上の客へ弾を通す必要があるためである。`has_clear_shot()` は同じレイ条件で発砲せずに射線を確認し、遮蔽された対象を狙って射撃間隔を消費することを防ぐ。
+銃撃には `Hitbox.ignore_groups` を適用しない。不安定型が客を撃つ経路と、リーダーの盾越しに客へ当たる経路の両方で、射線上の客へ弾を通す必要があるためである。`has_clear_shot()` は同じレイ条件で発砲せずに射線を確認し、遮蔽された対象を狙って射撃間隔を消費することを防ぐ。`has_clear_shot_from()` は同じ判定を任意の始点から行い、銃持ちが移動前の遮蔽マーカーからプレイヤーへの射線を評価する。
+
+`HitscanGun` の設定は役割ごとに異なる。不安定型は客を処刑する時間圧を作るため `damage = 100.0` / `ignore_stagger_threshold = true` として一発でダウンさせる。銃持ちはプレイヤーとの撃ち合いを成立させるため `damage = 20.0` / `ignore_stagger_threshold = false` とし、一発ではダウンさせない。処刑と撃ち合いでは求められる強さが異なるためである。どちらも銃撃によるダウンを致死として記録する `lethal = true` は共通とする。
 
 |`@export`|既定値|用途|
 |---|---:|---|
@@ -423,7 +425,7 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 |役割|追加ステート|挙動|
 |---|---|---|
 |`leader.gd`|`SHIELD`|最寄りの客を掴んで盾にする。盾状態のとき、プレイヤーの射線が盾越しなら弾は客に当たる。接近して `GRAPPLE` されると解除|
-|`gunner.gd`|`COVER`|グループ `cover` の `Marker3D` から、プレイヤーへの射線が通る位置を選んで移動する|
+|`gunner.gd`|`COVER`|**実装済み。** グループ `cover` の `Marker3D` から、射線・距離条件を満たす最寄りの位置を選んで移動し、予備動作後にプレイヤーを周期射撃する|
 |`erratic.gd`|—|**実装済み。** `shoot_civilian_interval` 秒ごとに、射線が通る最寄りの生存中の客を撃つ。放置するとエンディングが悪化する|
 
 遮蔽点は物理レイヤーではなくグループ `cover` で検索する。`Marker3D` は `CollisionObject3D` ではなく、物理レイヤーに乗らないため。
@@ -463,6 +465,33 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 |`civilian_aim_height`|`0.35`|客本体の原点から狙う高さ（m）|
 |`patrol_wait_variation`|`0.75`|`patrol_wait` の前後へ加える待ち時間の幅（秒）|
 |`erratic_color`|`Color(0.52, 0.24, 0.68)`|巡回中の役割識別色|
+|`hitscan_gun_path`|`MuzzlePoint/HitscanGun`|共有銃ノードへの注入パス|
+
+#### 銃持ちの実装状況（8/18〜8/21）
+
+`actors/npc/roles/gunner.gd` + `actors/npc/roles/gunner.tscn`。不安定型と同様に `robber.tscn` を継承し、胸の高さの `MuzzlePoint` と `HitscanGun` だけを追加する。共通の `Robber.State` は変更せず、基底 enum の最大値 `DOWNED` の直後を役割固有の `COVER` として割り当てる。
+
+- 共通知覚でプレイヤーを視認して ALERT の一拍を終えたら、CHASE で追跡せず COVER へ入る。ATTACK / STAGGERED 後に CHASE へ戻る経路でも、視認中かつ有効な遮蔽地点があれば移動前に COVER へ切り替える
+- グループ `cover` の `Marker3D` を走査し、(1) 足元マーカーへ `cover_muzzle_height` を加えた位置からプレイヤーへの射線が通る、(2) プレイヤーから `min_cover_distance` 以上離れている、の両方を満たす候補のうち、犯人自身から水平距離が最も近いものを選ぶ。射線判定は犯人の現在位置ではなく候補マーカー位置を始点とする
+- 選択地点へは共通の `NavigationAgent3D` と `chase_speed` で移動する。到着後は対象へ向き直り、`shoot_interval` ごとに撃つ。`shoot_telegraph_duration` は各周期の末尾に含め、その時間だけ予備動作を見せてから発砲する
+- 選択地点は `cover_reevaluate_interval` ごとに再評価する。プレイヤー移動で射線が切れた場合は別の有効地点へ移り、有効な地点が1つも無い場合（グループ自体が空の場合を含む）は共通の CHASE へフォールバックする
+- プレイヤーが `attack_range` 以内へ入った場合は射撃タイマーと予備動作を破棄し、共通の ATTACK へ移る。近接クールダウン中も射撃は再開しない。STAGGERED / DOWNED 中および `Act.PROLOGUE` 中も撃たない
+- 巡回中は銃持ち固有の青緑を使い、共通型の暗赤・不安定型の紫と区別する。ALERT / ATTACK などの状態提示は共通のステート色を維持する
+- 銃は `damage = 20.0` / `lethal = true` / `ignore_stagger_threshold = false`。不安定型は客の処刑が目的なので一発ダウンだが、銃持ちはプレイヤーとの撃ち合いが主目的であり、同じ強さでは一発でダウンして攻略が成立しないため弱くする。この設定では流れ弾を受けた客は5発でダウンし、`civilians_killed` に記録される。これは意図した挙動である
+
+`gunner.gd` が追加する `@export`:
+
+|項目|既定値|用途|
+|---|---:|---|
+|`cover_group`|`cover`|遮蔽地点を探すグループ名|
+|`min_cover_distance`|`6.0`|候補に必要なプレイヤーからの最低距離（m）|
+|`cover_reevaluate_interval`|`1.0`|選択地点を再評価する間隔（秒）|
+|`cover_arrive_distance`|`0.6`|遮蔽地点へ到着したとみなす水平距離（m）|
+|`cover_muzzle_height`|`1.0`|足元マーカーから射線始点へ加える高さ（m）|
+|`shoot_interval`|`2.2`|遮蔽地点でプレイヤーを撃つ間隔（秒）|
+|`shoot_telegraph_duration`|`0.5`|向き直ってから発砲するまでの予備動作（秒）|
+|`player_aim_height`|`1.2`|プレイヤー本体の原点から狙う高さ（m）|
+|`gunner_color`|`Color(0.16, 0.48, 0.50)`|巡回中の役割識別色|
 |`hitscan_gun_path`|`MuzzlePoint/HitscanGun`|共有銃ノードへの注入パス|
 
 #### ナビメッシュのベイク

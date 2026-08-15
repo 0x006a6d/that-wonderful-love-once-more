@@ -249,7 +249,7 @@ func _physics_alert(delta: float) -> void:
 		_face_position(_target.global_position, delta)
 	# 気づいてから飛びかかるまでの一拍。予備動作として見せる。
 	if _sm.time_in_state() >= 0.4:
-		_sm.transition_to(State.CHASE)
+		_transition_after_alert()
 
 
 # --- CHASE ----------------------------------------------------------------
@@ -257,6 +257,7 @@ func _physics_alert(delta: float) -> void:
 func _enter_chase() -> void:
 	_set_color(color_alert)
 	_lost_sight_for = 0.0
+	_on_chase_entered()
 
 
 func _physics_chase(delta: float) -> void:
@@ -519,6 +520,16 @@ func _next_patrol_index(current_index: int) -> int:
 
 func _next_patrol_wait() -> float:
 	return patrol_wait
+
+
+## 役割スクリプト向けの ALERT 遷移先拡張点。共通型は従来どおり CHASE へ進む。
+func _transition_after_alert() -> void:
+	_sm.transition_to(State.CHASE)
+
+
+## ATTACK / STAGGERED 後を含む CHASE 再進入時の役割拡張点。
+func _on_chase_entered() -> void:
+	pass
 
 
 func _face_position(point: Vector3, delta: float) -> void:
