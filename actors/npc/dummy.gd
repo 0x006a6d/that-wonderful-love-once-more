@@ -68,6 +68,8 @@ func _physics_process(delta: float) -> void:
 func receive_knockback(direction: Vector3, strength: float) -> void:
 	if _downed:
 		return
+	if strength <= 0.0:
+		return
 	var d := direction
 	d.y = 0.0
 	if d.length() < 0.001:

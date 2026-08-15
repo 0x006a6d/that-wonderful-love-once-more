@@ -43,6 +43,23 @@ func receive_hit(hitbox: Hitbox) -> void:
 		_health.take_hit(hitbox.damage, hitbox.lethal)
 
 
+## ヒットスキャン銃から呼ばれる。近接と同じ方向計算と被弾フラッシュを使うが、
+## 銃撃のノックバック強度は 0 とする。
+##
+## Hitbox.ignore_groups は近接の広い判定による誤爆を防ぐ仕組みであり、ここでは
+## 適用しない。銃弾は不安定型が客を撃つ場合も、リーダーが客を盾にする場合も
+## 客へ届く必要があるため、狙った射線の最初の Hurtbox にそのまま通す。
+func receive_shot(shooter: Node3D, damage: float, lethal: bool,
+		ignore_stagger_threshold: bool) -> void:
+	var dir := _knockback_direction(shooter)
+	if _owner_body != null and _owner_body.has_method("receive_knockback"):
+		_owner_body.call("receive_knockback", dir, 0.0)
+	if _owner_body != null and _owner_body.has_method("flash_hit"):
+		_owner_body.call("flash_hit")
+	if _health != null:
+		_health.take_hit(damage, lethal, ignore_stagger_threshold)
+
+
 ## 攻撃者から被弾側への水平方向（ノックバックの向き）。
 func _knockback_direction(attacker: Node3D) -> Vector3:
 	if attacker == null or _owner_body == null:

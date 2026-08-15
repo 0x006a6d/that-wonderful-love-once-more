@@ -1,0 +1,16 @@
+; robber.tscn をルートとして継承し、共通の当たり判定・Health・AI 構造を
+; 二重管理せず、役割差のスクリプトと銃口だけを追加する。
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://actors/npc/robber.tscn" id="1_robber"]
+[ext_resource type="Script" path="res://actors/npc/roles/erratic.gd" id="2_erratic"]
+[ext_resource type="Script" path="res://actors/shared/hitscan_gun.gd" id="3_gun"]
+
+[node name="Erratic" instance=ExtResource("1_robber")]
+script = ExtResource("2_erratic")
+
+[node name="MuzzlePoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -0.3)
+
+[node name="HitscanGun" type="Node3D" parent="MuzzlePoint"]
+script = ExtResource("3_gun")

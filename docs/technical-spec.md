@@ -316,7 +316,9 @@ func _disable_hitbox() -> void:
 
 `LockOnDetector` は犯人と客の両方を対象にし、`lock_on` 入力を押すたびに取得／解除をトグルする。プレイヤーの `MeleeHitbox` は `ignore_groups = ["civilian"]` を維持したまま、現在のロックオン対象を `exempt_body` に指定する。`target == exempt_body` の場合だけ `ignore_groups` の除外を無視するため、ロックオン中の客本人にだけ近接が通り、周囲の別の客には通らない。配列を実行時に in-place 変更しないので、別インスタンスへ設定が波及しない。犯人の近接は `exempt_body` を使わず、`["robber", "civilian"]` の除外を維持する。ロックは対象のダウン、16.0 m 超への離脱、0.6秒の連続遮蔽、対象のツリー退出で自動解除する。
 
-銃の場合、`RayCast3D` の当たり先が `Faction.CIVILIAN` なら HUD のレティクル色を変更し、警告状態を明示する。
+銃撃は狙った射線だけを判定するため、近接の誤爆防止用である `Hitbox.ignore_groups` の対象外とする。客への銃撃も除外しない。
+
+銃の場合、ヒットスキャンの射線上に `Faction.CIVILIAN` がいるなら HUD のレティクル色を変更し、警告状態を明示する。
 
 ### 6.5 プレイヤーの被弾（8/17）
 
@@ -341,10 +343,13 @@ func _disable_hitbox() -> void:
 signal staggered()
 signal downed(lethal: bool)
 
-func take_hit(damage: float, lethal: bool = false) -> void
+func take_hit(damage: float, lethal: bool = false,
+        ignore_stagger_threshold: bool = false) -> void
 ```
 
-致死判定は攻撃側が `Hitbox.lethal` として持ち、`Hurtbox` が `Health.take_hit(damage, lethal)` へ渡す。近接は `false`、銃撃は `true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
+致死判定は攻撃側が持ち、近接は `Hurtbox.receive_hit()` から `Health.take_hit(damage, lethal)`、銃撃は `Hurtbox.receive_shot()` から第3引数も含めて渡す。近接は `lethal = false`、銃撃は `lethal = true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
+
+`stagger_threshold` は `docs/game-design.md` §6.2 の「段階の設置」にあたり、広い近接判定の誤爆で客がダウンするのを防ぐ下限である。近接は既定の `ignore_stagger_threshold = false` のまま下限を適用する。狙って撃つ銃撃は `true` を渡し、HPが0なら被弾回数にかかわらずダウンさせる。既定値は `false` のため、既存の `take_hit()` 呼び出しの挙動は変わらない。
 
 ### 7.2 ステートマシン
 
@@ -365,6 +370,21 @@ func time_in_state() -> float
 ```
 
 駆動を所有者側の明示呼び出しにしているのは、本体の移動処理との実行順を確定させるため。ノードの `_physics_process` に任せると順序が読めない。`transition_to()` は進入コールバック内からの再入を検出して遷移後に適用する。
+
+### 7.3 ヒットスキャン銃
+
+`actors/shared/hitscan_gun.gd`（`HitscanGun`）を犯人の銃撃で共有する。`Node3D` である自身の位置を銃口とし、`fire_at(target_position)` が命中した `Hurtbox` の本体を返す。発砲時は `shot_fired(from, to, hit_body)` を通知する。銃声・マズルフラッシュ・弾道はここでは作らず、8/24 の演出フェーズからこのシグナルへ接続する。
+
+レイのマスクは layer 1（`world`）と layer 7（`hurtbox`）の和で、`collide_with_areas = true` とする。射手本体と射手自身の Hurtbox は除外する。最初の交点だけを採用するため、壁が先ならダメージを与えず、Hurtbox が先なら `Hurtbox.receive_shot()` から `Health.take_hit(damage, lethal, ignore_stagger_threshold)` へ渡す。
+
+銃撃には `Hitbox.ignore_groups` を適用しない。不安定型が客を撃つ経路と、リーダーの盾越しに客へ当たる経路の両方で、射線上の客へ弾を通す必要があるためである。`has_clear_shot()` は同じレイ条件で発砲せずに射線を確認し、遮蔽された対象を狙って射撃間隔を消費することを防ぐ。
+
+|`@export`|既定値|用途|
+|---|---:|---|
+|`damage`|`100.0`|一発のダメージ|
+|`lethal`|`true`|致死として記録するか|
+|`ignore_stagger_threshold`|`true`|近接用のよろけ回数下限を無視するか|
+|`max_range`|`30.0`|射程（m）|
 
 ## 8. 客（Civilian）
 
@@ -388,7 +408,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
 - **伏せ姿勢**は `Model` と Hurtbox のカプセルを X 軸に90度回して下げる。各本体原点を基準とした実測で、PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
 - **誤爆防止**は `Health.stagger_threshold = 3`。HPが先に0になっても3回目までは STAGGERED に留まり、一定時間後に直前の IDLE / PRONE へ戻る
 - **ダウン**は固定ポーズ。`Health.downed(lethal)` の値をそのまま `RunState.record_down(self, Faction.CIVILIAN, lethal)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
-- **致死判定は攻撃側**の `Hitbox.lethal` が持つ方式で確定。近接は `false`、銃撃は `true`。銃撃は未実装のため、現時点で実ゲーム内に `lethal = true` を設定する攻撃はない
+- **致死判定は攻撃側**が持つ方式で確定。近接の `Hitbox.lethal` は `false`、不安定型の `HitscanGun.lethal` は `true`。銃撃は `ignore_stagger_threshold = true` も渡し、客を1発でダウンさせる
 - **ロックオンを実装済み**。プレイヤーは犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。別の客と犯人側の近接は従来どおり `ignore_groups` で除外する
 - `_ready()` で `RunState.civilians_total` を直接加算する。ダウン数・死亡数は `RunState` の既存APIで記録する
 
@@ -404,7 +424,7 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 |---|---|---|
 |`leader.gd`|`SHIELD`|最寄りの客を掴んで盾にする。盾状態のとき、プレイヤーの射線が盾越しなら弾は客に当たる。接近して `GRAPPLE` されると解除|
 |`gunner.gd`|`COVER`|グループ `cover` の `Marker3D` から、プレイヤーへの射線が通る位置を選んで移動する|
-|`erratic.gd`|—|`shoot_civilian_interval` 秒ごとに、最寄りの客を撃つ。放置するとエンディングが悪化する|
+|`erratic.gd`|—|**実装済み。** `shoot_civilian_interval` 秒ごとに、射線が通る最寄りの生存中の客を撃つ。放置するとエンディングが悪化する|
 
 遮蔽点は物理レイヤーではなくグループ `cover` で検索する。`Marker3D` は `CollisionObject3D` ではなく、物理レイヤーに乗らないため。
 
@@ -423,6 +443,27 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 - 追跡速度（3.2 m/s）はプレイヤー（4.5 m/s）より遅い。逃げれば振り切れる
 - ALERT 到達時と自身のダウン時に `GameDirector.notify_robber_engaged()` を呼ぶ（§5 の INFILTRATION → ENGAGEMENT 条件）
 - ダウン時は `RunState.record_down()` を呼び、Hurtbox の監視を切って固定ポーズで倒れる。Area3D の監視フラグは信号処理中に書き換えられないため `set_deferred()` を使う
+
+#### 不安定型の実装状況（8/18〜8/21）
+
+`actors/npc/roles/erratic.gd` + `actors/npc/roles/erratic.tscn`。シーンは `robber.tscn` を継承し、共通の Health / Hurtbox / 近接 / NavigationAgent3D / ステートマシンを重複させず、胸の高さの `MuzzlePoint` と `HitscanGun` だけを追加する。
+
+- `Act.PROLOGUE` 中は射撃タイマーを進めない。INFILTRATION 以降、射線が通る最寄りの生存中の客を選び、対象へ向き直る予備動作のあとに撃つ
+- 遮蔽された客は候補から外す。予備動作中に遮蔽された場合も発砲せず、射撃間隔を消費しない
+- STAGGERED / DOWNED 中は撃たず、DOWNED 後は射撃処理を再開しない
+- PATROL の初期地点と次地点を固定順ではなく都度ランダムに選ぶ。同じ地点の連続選択は避け、待ち時間も `patrol_wait` の前後で揺らす。乱数は生成時に `randomize()` し、固定シードを使わない
+- 巡回中は不安定型固有の色を使う。ALERT / ATTACK などの状態提示は共通のステート色を維持する
+
+`erratic.gd` が追加する `@export`:
+
+|項目|既定値|用途|
+|---|---:|---|
+|`shoot_civilian_interval`|`8.0`|客を狙い始める間隔（秒）|
+|`shoot_telegraph_duration`|`0.6`|向き直ってから発砲するまでの予備動作（秒）|
+|`civilian_aim_height`|`0.35`|客本体の原点から狙う高さ（m）|
+|`patrol_wait_variation`|`0.75`|`patrol_wait` の前後へ加える待ち時間の幅（秒）|
+|`erratic_color`|`Color(0.52, 0.24, 0.68)`|巡回中の役割識別色|
+|`hitscan_gun_path`|`MuzzlePoint/HitscanGun`|共有銃ノードへの注入パス|
 
 #### ナビメッシュのベイク
 

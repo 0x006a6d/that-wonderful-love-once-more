@@ -200,6 +200,7 @@ func _enter_patrol() -> void:
 	_set_color(color_idle)
 	_lost_sight_for = 0.0
 	_patrol_wait_left = 0.0
+	_on_patrol_entered()
 
 
 func _physics_patrol(delta: float) -> void:
@@ -224,8 +225,8 @@ func _physics_patrol(delta: float) -> void:
 
 	var flat_distance := _flat_distance_to(point.global_position)
 	if flat_distance <= patrol_arrive_distance:
-		_patrol_wait_left = patrol_wait
-		_patrol_index = (_patrol_index + 1) % patrol_points.size()
+		_patrol_wait_left = _next_patrol_wait()
+		_patrol_index = _next_patrol_index(_patrol_index)
 		_stop_horizontal(delta)
 		return
 
@@ -395,6 +396,8 @@ func _on_downed(lethal: bool) -> void:
 func receive_knockback(direction: Vector3, strength: float) -> void:
 	if _sm != null and _sm.current() == State.DOWNED:
 		return
+	if strength <= 0.0:
+		return
 	var d := direction
 	d.y = 0.0
 	if d.length() < 0.001:
@@ -501,6 +504,21 @@ func _patrol_point(index: int) -> Node3D:
 	if index < 0 or index >= patrol_points.size():
 		return null
 	return get_node_or_null(patrol_points[index]) as Node3D
+
+
+## 役割スクリプト向けの巡回拡張点。共通型は従来どおり順番に巡回する。
+func _on_patrol_entered() -> void:
+	pass
+
+
+func _next_patrol_index(current_index: int) -> int:
+	if patrol_points.is_empty():
+		return 0
+	return (current_index + 1) % patrol_points.size()
+
+
+func _next_patrol_wait() -> float:
+	return patrol_wait
 
 
 func _face_position(point: Vector3, delta: float) -> void:
