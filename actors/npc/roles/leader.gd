@@ -12,8 +12,8 @@ const SHIELD: int = State.DOWNED + 1
 @export var grab_range: float = 1.2
 ## 保持中に客を置く、自分の正面方向の距離（m）。
 @export var shield_offset: float = 0.7
-## 盾を持ったままプレイヤーへ寄る速度（m/s）。
-@export var shield_move_speed: float = 0.9
+## SHIELD 中にプレイヤーへ向き直る補間速さ。側面へ回り込めるよう共通値より遅くする。
+@export var shield_face_speed: float = 1.5
 ## 正面からの近接を防ぐ角度（度、全角）。
 @export var shield_arc_deg: float = 120.0
 ## 側面・背面から盾を解除するために必要な命中回数。
@@ -107,6 +107,8 @@ func _enter_shield() -> void:
 
 
 func _physics_shield(delta: float) -> void:
+	# 人質を取った側から間合いを詰めず、プレイヤーに踏み込ませる。
+	_stop_horizontal_immediate()
 	if GameDirector.current_act == GameTypes.Act.PROLOGUE:
 		_release_shield()
 		_sm.transition_to(State.CHASE)
@@ -118,17 +120,8 @@ func _physics_shield(delta: float) -> void:
 	if _target == null:
 		_resolve_target()
 		if _target == null:
-			_stop_horizontal(delta)
 			return
-	var direction := _target.global_position - global_position
-	direction.y = 0.0
-	if direction.length_squared() > 0.0:
-		direction = direction.normalized()
-		velocity.x = direction.x * shield_move_speed
-		velocity.z = direction.z * shield_move_speed
-	else:
-		_stop_horizontal(delta)
-	_face_position(_target.global_position, delta)
+	_face_position_at_speed(_target.global_position, delta, shield_face_speed)
 
 
 func _exit_shield() -> void:

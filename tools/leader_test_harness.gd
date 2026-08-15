@@ -14,6 +14,9 @@ const ATTACK_DISTANCE: float = 1.0
 const ATTACK_DAMAGE: float = 10.0
 const HIT_SETTLE_FRAMES: int = 6
 const GROUND_SIZE: Vector3 = Vector3(30.0, 0.2, 30.0)
+const SHIELD_STATIONARY_DURATION: float = 0.5
+const SHIELD_STATIONARY_MAX_DISTANCE: float = 0.01
+const ORBIT_ARC_DEG: float = 90.0
 
 enum AttackSide { FRONT, SIDE, BACK }
 
@@ -119,6 +122,13 @@ func _perform_player_hit(player: Node3D, leader: Robber, side: int) -> Dictionar
 		AttackSide.BACK:
 			attack_direction = -forward
 	player.global_position = leader.global_position + attack_direction * ATTACK_DISTANCE
+	return await _perform_player_hit_at_current_position(player, leader)
+
+
+func _perform_player_hit_at_current_position(player: Node3D, leader: Robber) -> Dictionary:
+	var forward := -leader.global_transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
 
 	var hitbox := player.get_node("Model/MeleeHitbox") as Hitbox
 	var hurt_shape := leader.get_node("Hurtbox/CollisionShape3D") as CollisionShape3D

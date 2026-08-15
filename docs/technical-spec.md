@@ -323,6 +323,10 @@ func _disable_hitbox() -> void:
 
 `LockOnDetector` は犯人と客の両方を対象にし、`lock_on` 入力を押すたびに取得／解除をトグルする。プレイヤーの `MeleeHitbox` は `ignore_groups = ["civilian"]` を維持したまま、現在のロックオン対象を `exempt_body` に指定する。`target == exempt_body` の場合だけ `ignore_groups` の除外を無視するため、ロックオン中の客本人にだけ近接が通り、周囲の別の客には通らない。配列を実行時に in-place 変更しないので、別インスタンスへ設定が波及しない。犯人の近接は `exempt_body` を使わず、`["robber", "civilian"]` の除外を維持する。ロックは対象のダウン、16.0 m 超への離脱、0.6秒の連続遮蔽、対象のツリー退出で自動解除する。
 
+ロックオン中の客本人は、PRONE でも `Civilian.set_melee_targetable(true)` により Hurtbox の高さだけを `targeted_hurtbox_height`（既定 `0.8 m`）へ上げ、近接を届かせる。Model は伏せ姿のままとし、「狙って屈んで殴る」操作を当たり判定だけで表現する。ロック解除・ダウン・SHIELDED 進入時は現在ステート本来の高さへ必ず戻す。プレイヤーは `Civilian` 型を直接参照せず、対象が `set_melee_targetable()` を持つ場合だけ `has_method()` 経由で通知する。
+
+これは `docs/game-design.md` §6.2 の対策1（伏せた客には物理的に近接が届かない）と対策2（客への攻撃はロックオン必須）をそのまま併用すると、INFILTRATION 開始の銀行ロビーで客を攻撃する経路が消え、`RunState.civilians_downed >= 3` の「逸脱」へ到達できなくなるための例外である。誤爆防止は、ロックオンしていない客には従来どおり高さが届かず、かつ `ignore_groups` の除外も維持されることで担保する。
+
 銃撃は狙った射線だけを判定するため、近接の誤爆防止用である `Hitbox.ignore_groups` の対象外とする。客への銃撃も除外しない。
 
 銃の場合、ヒットスキャンの射線上に `Faction.CIVILIAN` がいるなら HUD のレティクル色を変更し、警告状態を明示する。
@@ -417,11 +421,11 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 
 - **見た目はプリミティブ**（カプセル）。犯人と同様に見た目を `Model` 子ノード1個へ隔離し、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下に置く。`Model` 以下にロジックもコリジョンも置かない。最終モデルへの差し替えは8/24以降（`docs/game-design.md` §7.1）
 - **幕への追従**は `GameDirector.act_changed` を購読する。PROLOGUE は IDLE、INFILTRATION 以降は PRONE。INFILTRATION 以降に生成した個体も `_ready()` から直接 PRONE へ入る
-- **伏せ姿勢**は `Model` と Hurtbox のカプセルを X 軸に90度回して下げる。各本体原点を基準とした実測で、PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
+- **伏せ姿勢**は `Model` と Hurtbox のカプセルを X 軸に90度回して下げる。各本体原点を基準とした実測で、通常の PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており、ロックオンしていない間は近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
 - **誤爆防止**は `Health.stagger_threshold = 3`。HPが先に0になっても3回目までは STAGGERED に留まり、一定時間後に直前の IDLE / PRONE へ戻る
 - **ダウン**は固定ポーズ。`Health.downed(lethal)` の値をそのまま `RunState.record_down(self, Faction.CIVILIAN, lethal)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
 - **致死判定は攻撃側**が持つ方式で確定。近接の `Hitbox.lethal` は `false`、不安定型の `HitscanGun.lethal` は `true`。銃撃は `ignore_stagger_threshold = true` も渡し、客を1発でダウンさせる
-- **ロックオンを実装済み**。プレイヤーは犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。別の客と犯人側の近接は従来どおり `ignore_groups` で除外する
+- **ロックオンを実装済み**。プレイヤーは PRONE を含む犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。`set_melee_targetable(enabled)` はロック中の PRONE Hurtbox の高さだけを `targeted_hurtbox_height = 0.8` へ上げ、解除時はその時点のステートに応じた高さへ戻す。DOWNED / SHIELDED 進入時にも対象化を破棄し、高さが取り残されないようにする。別の客と犯人側の近接は従来どおり `ignore_groups` と通常の伏せ高さで除外する
 - **リーダーからの保持API**として `enter_shielded(holder)` / `exit_shielded()` を公開する。客は `holder` の参照を保存せず、位置と向きはリーダー側が毎フレーム更新する。SHIELDED 中は IDLE と同じ立ち姿・Hurtbox を使い、幕が変わっても伏せない。解除時点の幕が PROLOGUE なら IDLE、それ以外なら PRONE へ戻る。軽い被弾では保持姿勢を維持し、ダウン時だけ DOWNED へ移る。識別色 `color_shielded = Color(0.82, 0.52, 0.18)` も `@export` とする
 - `_ready()` で `RunState.civilians_total` を直接加算する。ダウン数・死亡数は `RunState` の既存APIで記録する
 
@@ -435,7 +439,7 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 
 |役割|追加ステート|挙動|
 |---|---|---|
-|`leader.gd`|`SHIELD`|**実装済み。** 視認後は最寄りの生存中の客を先に確保し、正面に保持して低速でプレイヤーへ寄る。正面角内の近接を無効化し、側面・背面から規定回数被弾すると解除する|
+|`leader.gd`|`SHIELD`|**実装済み。** 視認後は最寄りの生存中の客を先に確保し、その場で正面に保持する。プレイヤーへゆっくり向き直り、正面角内の近接を無効化し、側面・背面から規定回数被弾すると解除する|
 |`gunner.gd`|`COVER`|**実装済み。** グループ `cover` の `Marker3D` から、射線・距離条件を満たす最寄りの位置を選んで移動し、予備動作後にプレイヤーを周期射撃する|
 |`erratic.gd`|—|**実装済み。** `shoot_civilian_interval` 秒ごとに、射線が通る最寄りの生存中の客を撃つ。放置するとエンディングが悪化する|
 
@@ -465,7 +469,8 @@ NavigationAgent3D / ステートマシンを重複させない。共通の `Robb
 基底 enum の最大値 `DOWNED` の直後を役割固有の `SHIELD` として割り当てる。
 
 - `Act.PROLOGUE` 以外でプレイヤーを視認すると、共通追跡より先に最寄りの生存中かつ未保持の客を選ぶ。`grab_range` まで共通の NavigationAgent3D と `chase_speed` で接近して `Civilian.enter_shielded(self)` を呼び、客がいない場合は共通の CHASE へフォールバックする
-- SHIELD 中は客を自分の前方 `shield_offset` に毎物理フレーム置き、本体と同じ向きにする。リーダーは常にプレイヤーへ向き直り、`shield_move_speed` でゆっくり接近する。保持中の客がダウン・ツリー退出・解放済みのいずれかになった場合は参照を破棄して CHASE へ戻る
+- SHIELD 中は移動せず、その場で客を自分の前方 `shield_offset` に毎物理フレーム置き、本体と同じ向きにする。人質を取った側から間合いを詰めるのは不自然であり、プレイヤーが攻略のため踏み込む必要を作るため、従来の `shield_move_speed` は削除した。保持中の客がダウン・ツリー退出・解放済みのいずれかになった場合は参照を破棄して CHASE へ戻り、解除後は従来どおり追跡する
+- SHIELD 中のプレイヤーへの向き直りだけ `shield_face_speed = 1.5` を使う。共通の `rotation_speed = 8.0` ではほぼ瞬時に追従して正面扇形から外れられず、「側面に回り込む」攻略が成立しなかったためである。他の共通6ステートは従来どおり `rotation_speed` を使う。既定値はプレイヤーが `move_speed = 4.5 m/s` で近接距離 `1.0 m` を90度回り込んだ実測（0.350秒）で、盾との相対角が68.88度となり、半角60度の防御範囲から外れる
 - 近接の方向判定はリーダーの水平前方と「リーダーから攻撃者位置」の正規化ベクトルの内積で行う。内積が `cos(deg_to_rad(shield_arc_deg / 2))` 以上、すなわち全角 `shield_arc_deg` の正面扇形内なら `blocks_hit_from()` が `true` を返す。盾を持っていない間は常に `false`
 - 正面扇形外の側面・背面攻撃は通常どおり Health へ通す。受理した被弾を数え、`shield_break_hits` 回で客を解放して CHASE へ戻る。それまでは SHIELD を維持する。外部遷移を含め STAGGERED / DOWNED へ入る場合も必ず解放する
 - 解放後は `regrab_cooldown` が尽きるまで別の客を含め再確保しない。満了後もプレイヤーを視認中で生存客がいれば再び確保へ向かう
@@ -477,7 +482,7 @@ NavigationAgent3D / ステートマシンを重複させない。共通の `Robb
 |---|---:|---|
 |`grab_range`|`1.2`|客を掴んだとみなす水平距離（m）|
 |`shield_offset`|`0.7`|保持中の客を置く正面距離（m）|
-|`shield_move_speed`|`0.9`|盾を持ったまま移動する速度（m/s）|
+|`shield_face_speed`|`1.5`|SHIELD 中だけ使う、側面へ回り込める遅い向き直り補間速度|
 |`shield_arc_deg`|`120.0`|近接を防ぐ正面扇形の全角（度）|
 |`shield_break_hits`|`3`|側面・背面から盾を解除する命中回数|
 |`regrab_cooldown`|`6.0`|解放後に再確保を禁止する時間（秒）|

@@ -13,6 +13,7 @@ func _ready() -> void:
 func _run() -> void:
 	print("=== リーダー 検証開始 ===")
 	await _test_fallback_without_civilian()
+	await _test_shield_stationary_and_orbit()
 	await _test_shield_combat_and_cooldown()
 	await _test_downed_releases_civilian()
 	await _test_prologue_does_not_grab()
@@ -30,6 +31,65 @@ func _test_fallback_without_civilian() -> void:
 	print("[fallback] CHASE=%.3f sec / state=%d" % [chase_elapsed, leader.current_state()])
 	_assert("1. 掴める客が居なければ CHASE へフォールバックする",
 		leader.current_state() == Robber.State.CHASE)
+
+
+func _test_shield_stationary_and_orbit() -> void:
+	await _new_world(GameTypes.Act.INFILTRATION)
+	var player := _spawn_player(PLAYER_POSITION)
+	_spawn_civilian(CIVILIAN_POSITION)
+	var leader := _spawn_leader(Vector3.ZERO)
+	await _wait_for_shield(leader, SHIELD_TIMEOUT)
+
+	var stationary_start := leader.global_position
+	for _index: int in range(_seconds_to_frames(SHIELD_STATIONARY_DURATION)):
+		await get_tree().physics_frame
+	var stationary_distance := _flat_distance(stationary_start, leader.global_position)
+	print("[shield stationary] duration=%.3f sec / horizontal distance=%.5f m / threshold=%.5f m" %
+		[SHIELD_STATIONARY_DURATION, stationary_distance, SHIELD_STATIONARY_MAX_DISTANCE])
+	_assert("14. SHIELD 中は一定時間経っても水平移動しない",
+		leader.current_state() == int(LEADER_SCRIPT.SHIELD)
+		and stationary_distance <= SHIELD_STATIONARY_MAX_DISTANCE)
+
+	var orbit_radius := ATTACK_DISTANCE
+	var start_forward := -leader.global_transform.basis.z
+	start_forward.y = 0.0
+	start_forward = start_forward.normalized()
+	player.global_position = leader.global_position + start_forward * orbit_radius
+	await get_tree().physics_frame
+	# 実機と同じ move_speed で近接間合いの円周を進み、盾の追従が間に合うかを測る。
+	var move_speed: float = float(player.get("move_speed"))
+	var physics_delta := 1.0 / float(Engine.physics_ticks_per_second)
+	var target_arc := deg_to_rad(ORBIT_ARC_DEG)
+	var traveled_arc := 0.0
+	var orbit_frames := 0
+	while traveled_arc < target_arc:
+		traveled_arc = minf(
+			traveled_arc + move_speed * physics_delta / orbit_radius, target_arc)
+		var orbit_direction := start_forward.rotated(Vector3.UP, traveled_arc)
+		player.global_position = leader.global_position + orbit_direction * orbit_radius
+		await get_tree().physics_frame
+		orbit_frames += 1
+
+	var shield_forward := -leader.global_transform.basis.z
+	shield_forward.y = 0.0
+	shield_forward = shield_forward.normalized()
+	var toward_player := player.global_position - leader.global_position
+	toward_player.y = 0.0
+	var measured_angle := rad_to_deg(shield_forward.angle_to(toward_player.normalized()))
+	var measured_duration := float(orbit_frames) * physics_delta
+	var orbit_hit := await _perform_player_hit_at_current_position(player, leader)
+	print(("[shield orbit] move_speed=%.3f m/s / radius=%.3f m / arc=%.2f deg / " +
+		"duration=%.3f sec / shield_face_speed=%.3f / relative angle=%.2f deg / " +
+		"shield half arc=%.2f deg / HP %.1f -> %.1f") %
+		[move_speed, orbit_radius, rad_to_deg(traveled_arc), measured_duration,
+		float(leader.get("shield_face_speed")), measured_angle,
+		float(leader.get("shield_arc_deg")) * 0.5,
+		float(orbit_hit.hp_before), float(orbit_hit.hp_after)])
+	_assert("15. move_speed で近接間合いを回り込むと盾の角度から外れて攻撃が通る",
+		int(leader.get("shield_break_hits")) > 1
+		and measured_angle > float(leader.get("shield_arc_deg")) * 0.5
+		and float(orbit_hit.hp_after) < float(orbit_hit.hp_before)
+		and leader.current_state() == int(LEADER_SCRIPT.SHIELD))
 
 
 func _test_shield_combat_and_cooldown() -> void:

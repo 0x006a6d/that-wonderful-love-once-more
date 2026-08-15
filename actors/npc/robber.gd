@@ -533,17 +533,27 @@ func _on_chase_entered() -> void:
 
 
 func _face_position(point: Vector3, delta: float) -> void:
+	_face_position_at_speed(point, delta, rotation_speed)
+
+
+## 役割ステートだけ向き直り速度を差し替えるための拡張点。
+## 共通ステートは _face_position() を通して従来の rotation_speed を使う。
+func _face_position_at_speed(point: Vector3, delta: float, face_speed: float) -> void:
 	var d := point - global_position
 	d.y = 0.0
 	if d.length() < 0.01:
 		return
-	_face_direction(d.normalized(), delta)
+	_face_direction_at_speed(d.normalized(), delta, face_speed)
 
 
 ## 前方は -Z。atan2(x, z) の結果に π を足すと -Z 向きのヨーになる。
 func _face_direction(direction: Vector3, delta: float) -> void:
+	_face_direction_at_speed(direction, delta, rotation_speed)
+
+
+func _face_direction_at_speed(direction: Vector3, delta: float, face_speed: float) -> void:
 	var target_yaw := atan2(direction.x, direction.z) + PI
-	rotation.y = lerp_angle(rotation.y, target_yaw, rotation_speed * delta)
+	rotation.y = lerp_angle(rotation.y, target_yaw, face_speed * delta)
 
 
 func _stop_horizontal(delta: float) -> void:

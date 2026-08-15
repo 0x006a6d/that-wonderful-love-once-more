@@ -18,6 +18,7 @@ func _run() -> void:
 	await _test_downed_release()
 	await _test_range_release()
 	await _test_short_occlusion()
+	await _test_prone_civilian_candidate()
 	await _test_civilian_filter_and_exemption()
 	await _test_other_civilian_filtered()
 	await _test_three_hit_down()
@@ -126,8 +127,23 @@ func _test_short_occlusion() -> void:
 		measured < detector.lose_target_grace and detector.current_target() == target)
 
 
+func _test_prone_civilian_candidate() -> void:
+	await _new_world()
+	GameDirector.advance_to(GameTypes.Act.INFILTRATION)
+	var player := _spawn_player()
+	var civilian := _spawn_civilian(Vector3(0.0, 0.0, -6.0))
+	await _wait_frames(SETTLE_FRAMES)
+	await _toggle_lock_on()
+	print("[prone candidate] state=%d / selected=%s" %
+		[int(civilian.call("current_state")), str(_lock_on(player).current_target() == civilian)])
+	_assert("伏せている客も LockOnDetector の候補として選べる",
+		int(civilian.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.PRONE
+		and _lock_on(player).current_target() == civilian)
+
+
 func _test_civilian_filter_and_exemption() -> void:
 	await _new_world()
+	GameDirector.advance_to(GameTypes.Act.INFILTRATION)
 	var player := _spawn_player()
 	var civilian := _spawn_civilian(Vector3(0.0, 0.0, -0.5))
 	_prepare_melee_facing(player)
@@ -135,22 +151,40 @@ func _test_civilian_filter_and_exemption() -> void:
 	var health := civilian.get_node("Health") as Health
 	var hitbox := player.get_node("Model/MeleeHitbox") as Hitbox
 	var hp_before := health.current_hp()
+	var hurt_shape := civilian.get_node("Hurtbox/CollisionShape3D") as CollisionShape3D
+	var prone_height := hurt_shape.position.y
 	await _strike(hitbox, MELEE_DAMAGE)
 	var hp_without_lock := health.current_hp()
 	print("[melee unlocked] civilian HP %.1f -> %.1f" % [hp_before, hp_without_lock])
-	_assert("ロックオンしていないとき客に近接が当たらない",
-		is_equal_approx(hp_before, hp_without_lock))
+	_assert("INFILTRATION の伏せた客にはロックオンなしの近接が届かない",
+		int(civilian.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.PRONE
+		and is_equal_approx(hp_before, hp_without_lock))
 	await _toggle_lock_on()
+	var targeted_height := hurt_shape.position.y
 	await _strike(hitbox, MELEE_DAMAGE)
 	var hp_with_lock := health.current_hp()
 	print("[melee locked] civilian HP %.1f -> %.1f / exempt=%s" %
 		[hp_without_lock, hp_with_lock, str(hitbox.exempt_body == civilian)])
-	_assert("同じ配置で客をロックオンすると近接が当たる",
+	_assert("同じ配置の伏せた客をロックオンすると同じ近接が届く",
 		_lock_on(player).current_target() == civilian and hp_with_lock < hp_without_lock)
+
+	await _toggle_lock_on()
+	var released_height := hurt_shape.position.y
+	var hp_after_release_before := health.current_hp()
+	await _strike(hitbox, MELEE_DAMAGE)
+	var hp_after_release := health.current_hp()
+	print("[melee release] Hurtbox y %.3f -> %.3f -> %.3f / HP %.1f -> %.1f" %
+		[prone_height, targeted_height, released_height,
+		hp_after_release_before, hp_after_release])
+	_assert("ロックオンを外すと Hurtbox が伏せた高さへ戻り近接が届かない",
+		targeted_height > prone_height
+		and is_equal_approx(released_height, prone_height)
+		and is_equal_approx(hp_after_release, hp_after_release_before))
 
 
 func _test_other_civilian_filtered() -> void:
 	await _new_world()
+	GameDirector.advance_to(GameTypes.Act.INFILTRATION)
 	var player := _spawn_player()
 	var civilian_a := _spawn_civilian(Vector3(0.0, 0.0, -0.5))
 	var civilian_b := _spawn_civilian(Vector3(0.25, 0.0, -0.5))
@@ -168,6 +202,7 @@ func _test_other_civilian_filtered() -> void:
 
 func _test_three_hit_down() -> void:
 	await _new_world()
+	GameDirector.advance_to(GameTypes.Act.INFILTRATION)
 	var player := _spawn_player()
 	var civilian := _spawn_civilian(Vector3(0.0, 0.0, -0.5))
 	_prepare_melee_facing(player)
@@ -203,4 +238,3 @@ func _test_camera_follow() -> void:
 	print("[camera yaw] before=%.3f deg / after=%.3f deg / theoretical=%.3f deg" %
 		[rad_to_deg(before), rad_to_deg(after), rad_to_deg(theoretical)])
 	_assert("カメラのヨーがロックオン対象方向へ向く", after_error < before_error)
-

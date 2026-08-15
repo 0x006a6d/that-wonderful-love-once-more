@@ -31,6 +31,8 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 ## Hurtbox の伏せ時の回転（度）と高さ（m）。無効化せず、将来の銃撃を受けられるようにする。
 @export var prone_hurtbox_rotation_degrees: Vector3 = Vector3(90.0, 0.0, 0.0)
 @export var prone_hurtbox_height: float = 0.35
+## ロックオン中に近接が届くよう持ち上げる Hurtbox の高さ（m）。
+@export var targeted_hurtbox_height: float = 0.8
 
 @export_group("Appearance")
 ## 各ステートを識別する色。
@@ -62,6 +64,8 @@ var _sm: StateMachine = null
 
 ## STAGGERED 終了後に戻る立ち姿／伏せ姿。
 var _return_state: int = CivilianState.IDLE
+## プレイヤー側から通知された、意図して近接対象にしている間だけ true。
+var _melee_targetable: bool = false
 
 
 func _ready() -> void:
@@ -122,6 +126,17 @@ func current_state() -> int:
 	return _sm.current() if _sm != null else CivilianState.IDLE
 
 
+## ロックオン中の客本人だけ、伏せた見た目を保ったまま近接可能な高さへする。
+## Model まで起こすと「狙って屈んで殴る」という意図が姿勢から失われるため、
+## 変更するのは Hurtbox の高さだけに限定する。
+func set_melee_targetable(enabled: bool) -> void:
+	var state := current_state()
+	# 保持・ダウン中は外部のロック状態にかかわらず通常の当たり判定へ戻す。
+	_melee_targetable = enabled \
+		and state != CivilianState.SHIELDED and state != CivilianState.DOWNED
+	_apply_hurtbox_pose_for_state(state)
+
+
 ## リーダーから呼ぶ保持開始API。holder は呼び出し元を明示するため受け取るが、
 ## 客から犯人への依存を作らないよう参照は保存しない。位置と向きも外側が更新する。
 func enter_shielded(_holder: Node3D) -> void:
@@ -143,18 +158,19 @@ func exit_shielded() -> void:
 func _enter_idle() -> void:
 	_set_color(color_idle)
 	_set_model_pose(idle_model_rotation_degrees, idle_model_height)
-	_set_hurtbox_pose(standing_hurtbox_rotation_degrees, standing_hurtbox_height)
+	_apply_hurtbox_pose_for_state(CivilianState.IDLE)
 
 
 func _enter_prone() -> void:
 	_set_color(color_prone)
 	_set_model_pose(prone_model_rotation_degrees, prone_model_height)
-	_set_hurtbox_pose(prone_hurtbox_rotation_degrees, prone_hurtbox_height)
+	_apply_hurtbox_pose_for_state(CivilianState.PRONE)
 
 
 # --- SHIELDED -------------------------------------------------------------
 
 func _enter_shielded() -> void:
+	_melee_targetable = false
 	_set_color(color_shielded)
 	# 盾の間は伏せず、IDLE と同じ立ち姿と Hurtbox を使う。
 	_set_model_pose(idle_model_rotation_degrees, idle_model_height)
@@ -175,6 +191,7 @@ func _physics_staggered(_delta: float) -> void:
 # --- DOWNED ---------------------------------------------------------------
 
 func _enter_downed() -> void:
+	_melee_targetable = false
 	_set_color(color_downed)
 	_set_model_pose(downed_model_rotation_degrees, downed_model_height)
 	_set_hurtbox_pose(prone_hurtbox_rotation_degrees, prone_hurtbox_height)
@@ -246,3 +263,17 @@ func _set_hurtbox_pose(pose_rotation_degrees: Vector3, height: float) -> void:
 	var position := _hurtbox_shape.position
 	position.y = height
 	_hurtbox_shape.position = position
+
+
+func _apply_hurtbox_pose_for_state(state: int) -> void:
+	var pose_state := state
+	if state == CivilianState.STAGGERED:
+		pose_state = _return_state
+	if pose_state == CivilianState.PRONE:
+		var height := targeted_hurtbox_height if _melee_targetable else prone_hurtbox_height
+		_set_hurtbox_pose(prone_hurtbox_rotation_degrees, height)
+		return
+	if pose_state == CivilianState.DOWNED:
+		_set_hurtbox_pose(prone_hurtbox_rotation_degrees, prone_hurtbox_height)
+		return
+	_set_hurtbox_pose(standing_hurtbox_rotation_degrees, standing_hurtbox_height)

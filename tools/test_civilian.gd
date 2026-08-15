@@ -148,6 +148,30 @@ func _run() -> void:
 		int(standing.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.PRONE
 		and hurtbox_top < melee_bottom)
 
+	var prone_model := standing.get_node("Model") as Node3D
+	var prone_model_rotation := prone_model.rotation_degrees
+	standing.call("set_melee_targetable", true)
+	await get_tree().physics_frame
+	var targeted_hurtbox_top := _capsule_top_relative(civilian_shape, standing)
+	print(("[targeted height] PRONE top %.3f -> %.3f m / MeleeHitbox bottom=%.3f m / " +
+		"configured height=%.3f m") %
+		[hurtbox_top, targeted_hurtbox_top, melee_bottom,
+		float(standing.get("targeted_hurtbox_height"))])
+	_assert("set_melee_targetable(true) は伏せ姿のまま Hurtbox だけ近接可能な高さにする",
+		int(standing.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.PRONE
+		and prone_model.rotation_degrees.is_equal_approx(prone_model_rotation)
+		and targeted_hurtbox_top >= melee_bottom)
+
+	standing.call("enter_shielded", player)
+	standing.call("exit_shielded")
+	await get_tree().physics_frame
+	var released_hurtbox_top := _capsule_top_relative(civilian_shape, standing)
+	print("[shielded reset] targeted top=%.3f m / released PRONE top=%.3f m" %
+		[targeted_hurtbox_top, released_hurtbox_top])
+	_assert("SHIELDED に入ると近接対象化が解除され、解放後は PRONE の高さへ戻る",
+		int(standing.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.PRONE
+		and released_hurtbox_top < melee_bottom)
+
 	await _clear_test_nodes()
 	RunState.reset()
 	GameDirector.reset()

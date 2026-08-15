@@ -75,6 +75,8 @@ var _camera_shake: Node = null
 var _health: Health = null
 var _lock_on: LockOn = null
 var _view_camera: Camera3D = null
+## target_released は対象を引数に持たないため、近接対象化を確実に戻す参照を保持する。
+var _melee_targetable: Node3D = null
 
 ## 被弾ロックの残り時間（秒）。0 より大きい間は移動入力を受け付けない。
 var _hurt_timer: float = 0.0
@@ -115,6 +117,7 @@ func _ready() -> void:
 func _on_lock_on_target_acquired(target: Node3D) -> void:
 	if _hitbox != null:
 		_hitbox.exempt_body = target
+	_set_melee_targetable(target)
 	if _camera_rig != null and _camera_rig.has_method("set_lock_on_target"):
 		_camera_rig.call("set_lock_on_target", target)
 
@@ -122,8 +125,24 @@ func _on_lock_on_target_acquired(target: Node3D) -> void:
 func _on_lock_on_target_released() -> void:
 	if _hitbox != null:
 		_hitbox.exempt_body = null
+	_clear_melee_targetable()
 	if _camera_rig != null and _camera_rig.has_method("set_lock_on_target"):
 		_camera_rig.call("set_lock_on_target", null)
+
+
+func _set_melee_targetable(target: Node3D) -> void:
+	_clear_melee_targetable()
+	if not target.has_method("set_melee_targetable"):
+		return
+	_melee_targetable = target
+	_melee_targetable.call("set_melee_targetable", true)
+
+
+func _clear_melee_targetable() -> void:
+	if is_instance_valid(_melee_targetable) \
+		and _melee_targetable.has_method("set_melee_targetable"):
+		_melee_targetable.call("set_melee_targetable", false)
+	_melee_targetable = null
 
 
 ## コンボの段開始で前方へ踏み込む（attack_brake が減衰を担う）。
