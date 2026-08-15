@@ -101,6 +101,15 @@ func _try_hit(area: Area3D) -> void:
 				return
 	if _already_hit.has(target):
 		return
+	# 対象固有の方向防御（盾、将来のガード等）を役割非依存で問い合わせる。
+	# 防御成立時は命中リストにも加えず、receive_hit / hit_landed の双方を呼ばない。
+	# hit_landed を起点にするヒットストップとカメラシェイクも発生しない。
+	if target.has_method("blocks_hit_from"):
+		var attacker_position: Vector3 = (
+			_source_body.global_position if _source_body != null else global_position)
+		var blocked: bool = bool(target.call("blocks_hit_from", attacker_position))
+		if blocked:
+			return
 	_already_hit.append(target)
 	hurtbox.receive_hit(self)
 	hit_landed.emit(target)

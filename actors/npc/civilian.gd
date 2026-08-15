@@ -7,7 +7,9 @@ class_name Civilian
 ## 見た目は Model 子ノード1個に隔離し、当面はプリミティブで表す。
 ## 向きは犯人と同じく本体を回し、前方は Godot 標準の -Z。
 
-enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
+## SHIELDED はリーダーが位置を制御する間の立ち姿と当たり判定を、通常の
+## IDLE / PRONE から独立させるための状態。既存IDを保つため末尾へ追加する。
+enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, SHIELDED }
 
 @export_group("Reaction")
 ## 被弾でよろけている秒数。
@@ -34,6 +36,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
 ## 各ステートを識別する色。
 @export var color_idle: Color = Color(0.24, 0.46, 0.72)
 @export var color_prone: Color = Color(0.22, 0.62, 0.48)
+@export var color_shielded: Color = Color(0.82, 0.52, 0.18)
 @export var color_staggered: Color = Color(0.92, 0.68, 0.20)
 @export var color_downed: Color = Color(0.30, 0.30, 0.34)
 
@@ -90,6 +93,7 @@ func _ready() -> void:
 		return
 	_sm.add_state(CivilianState.IDLE, &"idle", _enter_idle)
 	_sm.add_state(CivilianState.PRONE, &"prone", _enter_prone)
+	_sm.add_state(CivilianState.SHIELDED, &"shielded", _enter_shielded)
 	# FLEE_ROBBER / FLEE_PLAYER の登録と遷移は 8/22 に実装する。
 	_sm.add_state(CivilianState.STAGGERED, &"staggered", _enter_staggered, _physics_staggered)
 	_sm.add_state(CivilianState.DOWNED, &"downed", _enter_downed)
@@ -118,6 +122,22 @@ func current_state() -> int:
 	return _sm.current() if _sm != null else CivilianState.IDLE
 
 
+## リーダーから呼ぶ保持開始API。holder は呼び出し元を明示するため受け取るが、
+## 客から犯人への依存を作らないよう参照は保存しない。位置と向きも外側が更新する。
+func enter_shielded(_holder: Node3D) -> void:
+	if _sm == null or _sm.current() == CivilianState.DOWNED:
+		return
+	_sm.transition_to(CivilianState.SHIELDED)
+
+
+## リーダーから呼ぶ保持解除API。解除時点の幕に対応する通常姿勢へ戻す。
+func exit_shielded() -> void:
+	if _sm == null or _sm.current() != CivilianState.SHIELDED:
+		return
+	_return_state = _rest_state_for_act(GameDirector.current_act)
+	_sm.transition_to(_return_state)
+
+
 # --- IDLE / PRONE ---------------------------------------------------------
 
 func _enter_idle() -> void:
@@ -130,6 +150,15 @@ func _enter_prone() -> void:
 	_set_color(color_prone)
 	_set_model_pose(prone_model_rotation_degrees, prone_model_height)
 	_set_hurtbox_pose(prone_hurtbox_rotation_degrees, prone_hurtbox_height)
+
+
+# --- SHIELDED -------------------------------------------------------------
+
+func _enter_shielded() -> void:
+	_set_color(color_shielded)
+	# 盾の間は伏せず、IDLE と同じ立ち姿と Hurtbox を使う。
+	_set_model_pose(idle_model_rotation_degrees, idle_model_height)
+	_set_hurtbox_pose(standing_hurtbox_rotation_degrees, standing_hurtbox_height)
 
 
 # --- STAGGERED ------------------------------------------------------------
@@ -162,6 +191,10 @@ func _on_staggered() -> void:
 	if _sm == null or _sm.current() == CivilianState.DOWNED:
 		return
 	var current := _sm.current()
+	# 保持中の姿勢・位置制御を軽い被弾で解除しない。HPが尽きた場合は
+	# Health.downed から通常どおり DOWNED へ遷移する。
+	if current == CivilianState.SHIELDED:
+		return
 	if current == CivilianState.IDLE or current == CivilianState.PRONE:
 		_return_state = current
 	# 連続被弾でよろけ時間を延長する。
@@ -182,6 +215,7 @@ func _on_act_changed(act: int) -> void:
 	var current := _sm.current()
 	if current == CivilianState.IDLE or current == CivilianState.PRONE:
 		_sm.transition_to(_return_state)
+	# SHIELDED 中は立ち姿を維持し、解除時にここで更新した _return_state を使う。
 	# BREACH 以降の FLEE_ROBBER と、客ダウン後の FLEE_PLAYER は 8/22 に実装する。
 
 

@@ -305,6 +305,13 @@ func _disable_hitbox() -> void:
     $MeleeHitbox.monitoring = false
 ```
 
+`Hitbox._try_hit()` は陣営フィルタと二重ヒット判定の後、対象が
+`blocks_hit_from(attacker_position: Vector3) -> bool` を持つ場合に攻撃者の本体位置を
+渡して問い合わせる。`true` の場合は `Hurtbox.receive_hit()` と `hit_landed` の双方を
+呼ばず、命中しなかったものとして扱う。このAPIは盾に限定せず、将来のガード等にも使える
+方向防御の共通拡張点である。`hit_landed` を起点にするヒットストップとカメラシェイクも
+防御成立時には発生しない。
+
 ### 6.4 客への攻撃ルール（重要）
 
 `Hitbox.ignore_groups` は既定で `civilian` グループを**無視する**。以下の両方を満たす場合のみ客に通す。
@@ -391,8 +398,11 @@ func time_in_state() -> float
 ## 8. 客（Civilian）
 
 ```gdscript
-enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
+enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, SHIELDED }
 ```
+
+`SHIELDED` はリーダーに保持されている間の立ち姿と Hurtbox を、通常の `IDLE` / `PRONE`
+から区別するために追加した。既存6ステートの数値IDを変えないよう末尾へ置く。
 
 - `Act.PROLOGUE` では `IDLE`
 - `Act.INFILTRATION` 開始で `PRONE`（伏せる）。この姿勢では近接判定が届かない高さになる
@@ -403,7 +413,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
 
 #### 最小実装の状況（8/22 分の前倒し）
 
-`actors/npc/civilian.gd` + `actors/npc/civilian.tscn`。IDLE / PRONE / STAGGERED / DOWNED の4ステートを実装済み。`FLEE_ROBBER` / `FLEE_PLAYER` は8/22に実装するため、enum にだけ定義して遷移は未実装。
+`actors/npc/civilian.gd` + `actors/npc/civilian.tscn`。IDLE / PRONE / SHIELDED / STAGGERED / DOWNED の5ステートを実装済み。`FLEE_ROBBER` / `FLEE_PLAYER` は8/22に実装するため、enum にだけ定義して遷移は未実装。
 
 - **見た目はプリミティブ**（カプセル）。犯人と同様に見た目を `Model` 子ノード1個へ隔離し、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下に置く。`Model` 以下にロジックもコリジョンも置かない。最終モデルへの差し替えは8/24以降（`docs/game-design.md` §7.1）
 - **幕への追従**は `GameDirector.act_changed` を購読する。PROLOGUE は IDLE、INFILTRATION 以降は PRONE。INFILTRATION 以降に生成した個体も `_ready()` から直接 PRONE へ入る
@@ -412,6 +422,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED }
 - **ダウン**は固定ポーズ。`Health.downed(lethal)` の値をそのまま `RunState.record_down(self, Faction.CIVILIAN, lethal)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
 - **致死判定は攻撃側**が持つ方式で確定。近接の `Hitbox.lethal` は `false`、不安定型の `HitscanGun.lethal` は `true`。銃撃は `ignore_stagger_threshold = true` も渡し、客を1発でダウンさせる
 - **ロックオンを実装済み**。プレイヤーは犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。別の客と犯人側の近接は従来どおり `ignore_groups` で除外する
+- **リーダーからの保持API**として `enter_shielded(holder)` / `exit_shielded()` を公開する。客は `holder` の参照を保存せず、位置と向きはリーダー側が毎フレーム更新する。SHIELDED 中は IDLE と同じ立ち姿・Hurtbox を使い、幕が変わっても伏せない。解除時点の幕が PROLOGUE なら IDLE、それ以外なら PRONE へ戻る。軽い被弾では保持姿勢を維持し、ダウン時だけ DOWNED へ移る。識別色 `color_shielded = Color(0.82, 0.52, 0.18)` も `@export` とする
 - `_ready()` で `RunState.civilians_total` を直接加算する。ダウン数・死亡数は `RunState` の既存APIで記録する
 
 ## 9. 犯人（Robber）
@@ -424,7 +435,7 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 
 |役割|追加ステート|挙動|
 |---|---|---|
-|`leader.gd`|`SHIELD`|最寄りの客を掴んで盾にする。盾状態のとき、プレイヤーの射線が盾越しなら弾は客に当たる。接近して `GRAPPLE` されると解除|
+|`leader.gd`|`SHIELD`|**実装済み。** 視認後は最寄りの生存中の客を先に確保し、正面に保持して低速でプレイヤーへ寄る。正面角内の近接を無効化し、側面・背面から規定回数被弾すると解除する|
 |`gunner.gd`|`COVER`|**実装済み。** グループ `cover` の `Marker3D` から、射線・距離条件を満たす最寄りの位置を選んで移動し、予備動作後にプレイヤーを周期射撃する|
 |`erratic.gd`|—|**実装済み。** `shoot_civilian_interval` 秒ごとに、射線が通る最寄りの生存中の客を撃つ。放置するとエンディングが悪化する|
 
@@ -445,6 +456,33 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 - 追跡速度（3.2 m/s）はプレイヤー（4.5 m/s）より遅い。逃げれば振り切れる
 - ALERT 到達時と自身のダウン時に `GameDirector.notify_robber_engaged()` を呼ぶ（§5 の INFILTRATION → ENGAGEMENT 条件）
 - ダウン時は `RunState.record_down()` を呼び、Hurtbox の監視を切って固定ポーズで倒れる。Area3D の監視フラグは信号処理中に書き換えられないため `set_deferred()` を使う
+
+#### リーダーの実装状況（8/18〜8/21）
+
+`actors/npc/roles/leader.gd` + `actors/npc/roles/leader.tscn`。シーンは
+`robber.tscn` を継承してスクリプトだけを差し替え、共通の Health / Hurtbox / 近接 /
+NavigationAgent3D / ステートマシンを重複させない。共通の `Robber.State` は変更せず、
+基底 enum の最大値 `DOWNED` の直後を役割固有の `SHIELD` として割り当てる。
+
+- `Act.PROLOGUE` 以外でプレイヤーを視認すると、共通追跡より先に最寄りの生存中かつ未保持の客を選ぶ。`grab_range` まで共通の NavigationAgent3D と `chase_speed` で接近して `Civilian.enter_shielded(self)` を呼び、客がいない場合は共通の CHASE へフォールバックする
+- SHIELD 中は客を自分の前方 `shield_offset` に毎物理フレーム置き、本体と同じ向きにする。リーダーは常にプレイヤーへ向き直り、`shield_move_speed` でゆっくり接近する。保持中の客がダウン・ツリー退出・解放済みのいずれかになった場合は参照を破棄して CHASE へ戻る
+- 近接の方向判定はリーダーの水平前方と「リーダーから攻撃者位置」の正規化ベクトルの内積で行う。内積が `cos(deg_to_rad(shield_arc_deg / 2))` 以上、すなわち全角 `shield_arc_deg` の正面扇形内なら `blocks_hit_from()` が `true` を返す。盾を持っていない間は常に `false`
+- 正面扇形外の側面・背面攻撃は通常どおり Health へ通す。受理した被弾を数え、`shield_break_hits` 回で客を解放して CHASE へ戻る。それまでは SHIELD を維持する。外部遷移を含め STAGGERED / DOWNED へ入る場合も必ず解放する
+- 解放後は `regrab_cooldown` が尽きるまで別の客を含め再確保しない。満了後もプレイヤーを視認中で生存客がいれば再び確保へ向かう
+- **今回の範囲外**: プレイヤーの銃が未実装のため、盾越しの射線で弾を客へ当てる処理はまだ無い。またプレイヤーの `GRAPPLE` ステートが未実装のため、接近時の格闘モード専用「引き剥がし」もまだ無い。銃だけで盾を攻略できないという `docs/game-design.md` §6.1 の方針を維持し、両方をプレイヤーの銃・GRAPPLE と合わせて **8/24以降** に追加する
+
+`leader.gd` が追加する `@export`:
+
+|項目|既定値|用途|
+|---|---:|---|
+|`grab_range`|`1.2`|客を掴んだとみなす水平距離（m）|
+|`shield_offset`|`0.7`|保持中の客を置く正面距離（m）|
+|`shield_move_speed`|`0.9`|盾を持ったまま移動する速度（m/s）|
+|`shield_arc_deg`|`120.0`|近接を防ぐ正面扇形の全角（度）|
+|`shield_break_hits`|`3`|側面・背面から盾を解除する命中回数|
+|`regrab_cooldown`|`6.0`|解放後に再確保を禁止する時間（秒）|
+|`leader_color`|`Color(0.48, 0.16, 0.18)`|巡回中の役割識別色|
+|`shield_color`|`Color(0.68, 0.30, 0.12)`|SHIELD 中の状態表示色|
 
 #### 不安定型の実装状況（8/18〜8/21）
 
