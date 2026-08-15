@@ -1,34 +1,18 @@
-extends SceneTree
+extends Node
 
 ## RunState の判定ロジックをヘッドレスで検証する。
 ## resolve_ending() が 4 分岐すべて返すこと、および
 ## deviation_level() / police_threat_level() の境界を確認する。
 ##
-## 実行: godot --headless --path . --script res://tools/test_run_state.gd
-##
-## 注意: --script モードでは autoload グローバル（RunState / GameTypes）が
-## 登録されないため、対象スクリプトを直接ロードして検証する。
-## run_state.gd は GameTypes を参照するので、先に GameTypes を
-## Engine.register_singleton() でグローバル名として登録してから
-## RunState をインスタンス化する。
+## 実行: godot --headless --path . res://tools/test_run_state.tscn
 
 const GameTypesScript := preload("res://autoload/game_types.gd")
-const RunStateScript := preload("res://autoload/run_state.gd")
-
-var RunState: Node = null
-
 var _pass: int = 0
 var _fail: int = 0
 
 
-func _init() -> void:
+func _ready() -> void:
 	print("=== RunState 検証開始 ===")
-
-	# run_state.gd 内の "GameTypes.Faction.*" 等を解決させるため、
-	# GameTypes をグローバル singleton 名として登録する。
-	if not Engine.has_singleton("GameTypes"):
-		Engine.register_singleton("GameTypes", GameTypesScript.new())
-	RunState = RunStateScript.new()
 
 	_test_ending_ideal()
 	_test_ending_normal()
@@ -44,15 +28,7 @@ func _init() -> void:
 		print("ALL PASS")
 	else:
 		print("HAS FAILURE")
-	if RunState != null:
-		RunState.free()
-		RunState = null
-	if Engine.has_singleton("GameTypes"):
-		var gt := Engine.get_singleton("GameTypes")
-		Engine.unregister_singleton("GameTypes")
-		if is_instance_valid(gt):
-			gt.free()
-	quit(0 if _fail == 0 else 1)
+	get_tree().quit(0 if _fail == 0 else 1)
 
 
 func _assert(label: String, cond: bool) -> void:
@@ -176,6 +152,7 @@ func _test_reset() -> void:
 	RunState.civilians_total = 9
 	RunState.civilians_downed = 9
 	RunState.civilians_killed = 9
+	RunState.robbers_total = 9
 	RunState.robbers_killed = 9
 	RunState.player_fired_gun = true
 	RunState.elapsed = 123.0
@@ -184,6 +161,7 @@ func _test_reset() -> void:
 		and RunState.civilians_downed == 0 \
 		and RunState.civilians_killed == 0 \
 		and RunState.civilians_rescued == 0 \
+		and RunState.robbers_total == 0 \
 		and RunState.robbers_downed == 0 \
 		and RunState.robbers_killed == 0 \
 		and RunState.player_fired_gun == false \

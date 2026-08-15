@@ -132,6 +132,7 @@ func _ready() -> void:
 	_hitbox = get_node_or_null(hitbox_path) as Hitbox
 	_agent = get_node_or_null(agent_path) as NavigationAgent3D
 	_sm = get_node_or_null(state_machine_path) as StateMachine
+	RunState.robbers_total += 1
 
 	if _mesh != null:
 		# 個体ごとに独立した色変化にするためマテリアルを複製する。
@@ -388,6 +389,10 @@ func _on_downed(lethal: bool) -> void:
 	if not _engaged_notified:
 		_engaged_notified = true
 		GameDirector.notify_robber_engaged()
+	# 全滅という事実は RunState の集計から判定するが、幕を進める判断と通知は
+	# 犯人側が担う。RunState.record_down() に進行ロジックを持ち込まない。
+	if RunState.robbers_total > 0 and RunState.robbers_downed >= RunState.robbers_total:
+		GameDirector.notify_all_robbers_downed()
 	_sm.transition_to(State.DOWNED)
 
 

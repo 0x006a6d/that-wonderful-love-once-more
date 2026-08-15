@@ -1,8 +1,8 @@
 extends CharacterBody3D
 class_name Civilian
 
-## 客の最小共通挙動（technical-spec §8）。
-## FLEE_ROBBER / FLEE_PLAYER とロックオン連携は 8/22 に実装する。
+## 客の共通挙動（technical-spec §8）。
+## コンテスト版では BREACH を作らないため、FLEE_ROBBER は実装しない。
 ##
 ## 見た目は Model 子ノード1個に隔離し、当面はプリミティブで表す。
 ## 向きは犯人と同じく本体を回し、前方は Godot 標準の -Z。
@@ -14,6 +14,22 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 @export_group("Reaction")
 ## 被弾でよろけている秒数。
 @export var stagger_duration: float = 0.45
+
+@export_group("Flee Player")
+## 客が1人以上ダウンした後、プレイヤーを警戒し始める距離（m）。
+@export var flee_trigger_distance: float = 4.0
+## プレイヤーから逃げる移動速度（m/s）。
+@export var flee_speed: float = 3.0
+## この距離まで離れたら幕に応じた通常姿勢へ戻る（m）。
+@export var flee_stop_distance: float = 7.0
+## 逃走中の経路目標を現在位置から離す距離（m）。
+@export var flee_path_distance: float = 8.0
+## 壁による見失い判定に使う目線の高さ（m）。
+@export var flee_eye_height: float = 1.0
+## プレイヤーを探すグループ名。
+@export var player_group: StringName = &"player"
+## 見失い判定を遮る物理レイヤー（既定は world）。
+@export_flags_3d_physics var flee_obstacle_mask: int = 1
 
 @export_group("Pose")
 ## 立ち姿の Model の回転（度）と高さ（m）。
@@ -39,6 +55,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 @export var color_idle: Color = Color(0.24, 0.46, 0.72)
 @export var color_prone: Color = Color(0.22, 0.62, 0.48)
 @export var color_shielded: Color = Color(0.82, 0.52, 0.18)
+@export var color_flee_player: Color = Color(0.68, 0.28, 0.62)
 @export var color_staggered: Color = Color(0.92, 0.68, 0.20)
 @export var color_downed: Color = Color(0.30, 0.30, 0.34)
 
@@ -48,6 +65,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 @export var health_path: NodePath = ^"Health"
 @export var hurtbox_path: NodePath = ^"Hurtbox"
 @export var hurtbox_shape_path: NodePath = ^"Hurtbox/CollisionShape3D"
+@export var agent_path: NodePath = ^"NavigationAgent3D"
 @export var state_machine_path: NodePath = ^"StateMachine"
 @export_group("")
 
@@ -60,7 +78,10 @@ var _material: StandardMaterial3D = null
 var _health: Health = null
 var _hurtbox: Area3D = null
 var _hurtbox_shape: CollisionShape3D = null
+var _agent: NavigationAgent3D = null
 var _sm: StateMachine = null
+var _player: Node3D = null
+var _flee_mode: bool = false
 
 ## STAGGERED 終了後に戻る立ち姿／伏せ姿。
 var _return_state: int = CivilianState.IDLE
@@ -74,6 +95,7 @@ func _ready() -> void:
 	_health = get_node_or_null(health_path) as Health
 	_hurtbox = get_node_or_null(hurtbox_path) as Area3D
 	_hurtbox_shape = get_node_or_null(hurtbox_shape_path) as CollisionShape3D
+	_agent = get_node_or_null(agent_path) as NavigationAgent3D
 	_sm = get_node_or_null(state_machine_path) as StateMachine
 
 	if _mesh != null:
@@ -90,15 +112,19 @@ func _ready() -> void:
 		_health.downed.connect(_on_downed)
 
 	RunState.civilians_total += 1
+	_flee_mode = RunState.civilians_downed > 0
+	RunState.civilian_downed.connect(_on_civilian_downed)
 	GameDirector.act_changed.connect(_on_act_changed)
 
 	if _sm == null:
 		push_warning("civilian: StateMachine が無い")
 		return
-	_sm.add_state(CivilianState.IDLE, &"idle", _enter_idle)
-	_sm.add_state(CivilianState.PRONE, &"prone", _enter_prone)
+	_sm.add_state(CivilianState.IDLE, &"idle", _enter_idle, _physics_rest)
+	_sm.add_state(CivilianState.PRONE, &"prone", _enter_prone, _physics_rest)
 	_sm.add_state(CivilianState.SHIELDED, &"shielded", _enter_shielded)
-	# FLEE_ROBBER / FLEE_PLAYER の登録と遷移は 8/22 に実装する。
+	_sm.add_state(CivilianState.FLEE_PLAYER, &"flee_player",
+		_enter_flee_player, _physics_flee_player)
+	# FLEE_ROBBER は Act.BREACH 以降の仕様であり、BREACH のないコンテスト版では登録しない。
 	_sm.add_state(CivilianState.STAGGERED, &"staggered", _enter_staggered, _physics_staggered)
 	_sm.add_state(CivilianState.DOWNED, &"downed", _enter_downed)
 	_sm.state_changed.connect(func(_from: int, to: int) -> void: state_entered.emit(to))
@@ -111,9 +137,9 @@ func _physics_process(delta: float) -> void:
 	if _sm != null:
 		_sm.physics_update(delta)
 
-	# 客は自走しない。床への追従に必要な重力だけを適用する。
-	velocity.x = 0.0
-	velocity.z = 0.0
+	if current_state() != CivilianState.FLEE_PLAYER:
+		velocity.x = 0.0
+		velocity.z = 0.0
 	if not is_on_floor():
 		velocity.y += get_gravity().y * delta
 	else:
@@ -165,6 +191,67 @@ func _enter_prone() -> void:
 	_set_color(color_prone)
 	_set_model_pose(prone_model_rotation_degrees, prone_model_height)
 	_apply_hurtbox_pose_for_state(CivilianState.PRONE)
+
+
+func _physics_rest(_delta: float) -> void:
+	if not _flee_mode:
+		return
+	_resolve_player()
+	if _player == null:
+		return
+	if _flat_distance_to(_player.global_position) <= flee_trigger_distance \
+			and _can_see_player():
+		_sm.transition_to(CivilianState.FLEE_PLAYER)
+
+
+# --- FLEE_PLAYER ----------------------------------------------------------
+
+func _enter_flee_player() -> void:
+	_melee_targetable = false
+	_set_color(color_flee_player)
+	# 走行中は立ち姿に戻す。停止時に幕に応じて IDLE / PRONE を選び直す。
+	_set_model_pose(idle_model_rotation_degrees, idle_model_height)
+	_set_hurtbox_pose(standing_hurtbox_rotation_degrees, standing_hurtbox_height)
+
+
+func _physics_flee_player(_delta: float) -> void:
+	_resolve_player()
+	if _player == null or not _can_see_player():
+		_return_to_rest()
+		return
+
+	var distance := _flat_distance_to(_player.global_position)
+	if distance >= flee_stop_distance:
+		_return_to_rest()
+		return
+
+	var away := global_position - _player.global_position
+	away.y = 0.0
+	if away.length_squared() <= 0.0:
+		away = global_transform.basis.z
+	away = away.normalized()
+	if _agent == null:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+
+	# 目標点をプレイヤーの反対側へ更新し、NavigationAgent3D の経路に沿う。
+	# 直線移動を使わないため、壁や什器に向かって走り続けない。
+	var desired_target := _player.global_position + away * flee_path_distance
+	# 毎フレーム現在位置基準で目標を動かすと経路が先頭へ戻り続けるため、
+	# プレイヤー基準の安定した目標を、有意に変わったときだけ更新する。
+	if _agent.target_position.distance_to(desired_target) > _agent.path_desired_distance:
+		_agent.target_position = desired_target
+	var next_position := _agent.get_next_path_position()
+	var move_direction := next_position - global_position
+	move_direction.y = 0.0
+	if move_direction.length_squared() <= 0.0:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+	move_direction = move_direction.normalized()
+	velocity.x = move_direction.x * flee_speed
+	velocity.z = move_direction.z * flee_speed
 
 
 # --- SHIELDED -------------------------------------------------------------
@@ -225,6 +312,11 @@ func _on_downed(lethal: bool) -> void:
 	_sm.transition_to(CivilianState.DOWNED)
 
 
+func _on_civilian_downed(total: int) -> void:
+	if total > 0:
+		_flee_mode = true
+
+
 func _on_act_changed(act: int) -> void:
 	if _sm == null or _sm.current() == CivilianState.DOWNED:
 		return
@@ -233,11 +325,37 @@ func _on_act_changed(act: int) -> void:
 	if current == CivilianState.IDLE or current == CivilianState.PRONE:
 		_sm.transition_to(_return_state)
 	# SHIELDED 中は立ち姿を維持し、解除時にここで更新した _return_state を使う。
-	# BREACH 以降の FLEE_ROBBER と、客ダウン後の FLEE_PLAYER は 8/22 に実装する。
+	# FLEE_PLAYER 中は停止時に更新済みの _return_state へ戻る。
 
 
 func _rest_state_for_act(act: int) -> int:
 	return CivilianState.IDLE if act == GameTypes.Act.PROLOGUE else CivilianState.PRONE
+
+
+func _return_to_rest() -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_return_state = _rest_state_for_act(GameDirector.current_act)
+	_sm.transition_to(_return_state)
+
+
+func _resolve_player() -> void:
+	if _player == null or not is_instance_valid(_player):
+		_player = get_tree().get_first_node_in_group(player_group) as Node3D
+
+
+func _can_see_player() -> bool:
+	if _player == null:
+		return false
+	var from := global_position + Vector3.UP * flee_eye_height
+	var to := _player.global_position + Vector3.UP * flee_eye_height
+	var query := PhysicsRayQueryParameters3D.create(
+		from, to, flee_obstacle_mask, [get_rid()])
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+
+func _flat_distance_to(position: Vector3) -> float:
+	return Vector2(global_position.x - position.x, global_position.z - position.z).length()
 
 
 # --- 表示・姿勢ヘルパ ------------------------------------------------------

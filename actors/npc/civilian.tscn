@@ -51,5 +51,11 @@ shape = SubResource("Capsule_hurt")
 script = ExtResource("2_health")
 stagger_threshold = 3
 
+[node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.6
+target_desired_distance = 0.6
+radius = 0.35
+avoidance_enabled = false
+
 [node name="StateMachine" type="Node" parent="."]
 script = ExtResource("4_sm")

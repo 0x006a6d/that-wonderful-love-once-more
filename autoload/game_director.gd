@@ -8,16 +8,15 @@ extends Node
 ## 移行条件（technical-spec.md §5）:
 ##   PROLOGUE      -> INFILTRATION : 冒頭カットシーン終了
 ##   INFILTRATION  -> ENGAGEMENT   : 犯人のいずれかが ALERT、または犯人1体がダウン
-##   ENGAGEMENT    -> BREACH       : ENGAGEMENT 開始から breach_delay 秒経過。
-##                                   RunState.player_fired_gun が true なら 40% 短縮
-##   BREACH        -> EPILOGUE     : 犯人3体すべてがダウン
-##
-## 本日（8/14）実装するのは幕移行の骨組みと、時間系（ENGAGEMENT -> BREACH）の
-## タイマー。犯人・警察の実体は未実装のため、犯人ダウン数などの条件は
-## 外部からの notify_* 呼び出しで駆動する形にしてある。
+##   ENGAGEMENT    -> EPILOGUE     : 犯人全員がダウン（コンテスト版）
+##   ENGAGEMENT    -> BREACH       : enable_breach 時、breach_delay 秒経過
+##   BREACH        -> EPILOGUE     : 犯人全員がダウン
 
 signal act_changed(act: int)
 
+## コンテスト版では警察・第3幕を作らないため false。
+## 8/24 以降に警察を実装した時点で true に切り替える。
+@export var enable_breach: bool = false
 ## ENGAGEMENT 開始から BREACH までの基準待機秒数。
 @export var breach_delay: float = 90.0
 ## player_fired_gun が true のときに breach_delay へ掛ける短縮係数（40% 短縮）。
@@ -31,13 +30,22 @@ var _breach_timer: SceneTreeTimer = null
 var _breach_timer_generation: int = 0
 
 
+func _process(delta: float) -> void:
+	# プレイ時間は潜入開始から決着直前まで。進行の管理者が加算することで、
+	# RunState 自身にはフレーム処理や幕の判断を持たせない。
+	if current_act == GameTypes.Act.INFILTRATION \
+			or current_act == GameTypes.Act.ENGAGEMENT \
+			or current_act == GameTypes.Act.BREACH:
+		RunState.elapsed += delta
+
+
 ## 任意の幕へ直接移行する。同じ幕への再移行は無視する。
 func advance_to(act: int) -> void:
 	if act == current_act:
 		return
 	current_act = act
 	act_changed.emit(current_act)
-	if act == GameTypes.Act.ENGAGEMENT:
+	if act == GameTypes.Act.ENGAGEMENT and enable_breach:
 		_start_breach_timer()
 
 
@@ -54,9 +62,12 @@ func notify_robber_engaged() -> void:
 		advance_to(GameTypes.Act.ENGAGEMENT)
 
 
-## 犯人が全滅した。BREACH のときのみ EPILOGUE へ進む。
+## 犯人が全滅した。コンテスト版は ENGAGEMENT から直接 EPILOGUE へ進む。
+## 警察実装後に enable_breach=true とした場合は、従来どおり BREACH からのみ進む。
 func notify_all_robbers_downed() -> void:
-	if current_act == GameTypes.Act.BREACH:
+	if enable_breach and current_act == GameTypes.Act.BREACH:
+		advance_to(GameTypes.Act.EPILOGUE)
+	elif not enable_breach and current_act == GameTypes.Act.ENGAGEMENT:
 		advance_to(GameTypes.Act.EPILOGUE)
 
 
@@ -77,7 +88,7 @@ func _start_breach_timer() -> void:
 
 func _on_breach_timer_timeout() -> void:
 	_breach_timer = null
-	if current_act == GameTypes.Act.ENGAGEMENT:
+	if enable_breach and current_act == GameTypes.Act.ENGAGEMENT:
 		advance_to(GameTypes.Act.BREACH)
 
 

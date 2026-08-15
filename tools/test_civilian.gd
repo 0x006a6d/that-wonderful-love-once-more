@@ -6,6 +6,7 @@ extends Node
 const CIVILIAN_SCENE: PackedScene = preload("res://actors/npc/civilian.tscn")
 const CIVILIAN_SCRIPT: Script = preload("res://actors/npc/civilian.gd")
 const PLAYER_SCENE: PackedScene = preload("res://actors/player/player.tscn")
+const FLEE_TEST_SCRIPT: Script = preload("res://tools/civilian_flee_test.gd")
 const SETTLE_FRAMES: int = 8
 
 var _pass: int = 0
@@ -173,6 +174,19 @@ func _run() -> void:
 		and released_hurtbox_top < melee_bottom)
 
 	await _clear_test_nodes()
+	var flee_test: Object = FLEE_TEST_SCRIPT.new()
+	var flee_result: Dictionary = await flee_test.call("run", self)
+	_assert("civilians_downed == 0 の間は接近されても逃げない",
+		bool(flee_result.get(&"no_flee_before_down", false)))
+	print("[flee distance] 前=%.3f m / 後=%.3f m" %
+		[float(flee_result.get(&"distance_before", 0.0)),
+		float(flee_result.get(&"distance_after", 0.0))])
+	_assert("客が1人倒れた後は FLEE_PLAYER に入りプレイヤーとの距離が開く",
+		bool(flee_result.get(&"entered_and_moved_away", false)))
+	_assert("flee_stop_distance まで離れると幕に応じた PRONE へ戻る",
+		bool(flee_result.get(&"returned_to_rest", false)))
+	_assert("DOWNED / SHIELDED の客は逃げない",
+		bool(flee_result.get(&"incapacitated_did_not_flee", false)))
 	RunState.reset()
 	GameDirector.reset()
 	_finish()

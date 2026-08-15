@@ -17,6 +17,7 @@ var civilians_total: int = 0
 var civilians_downed: int = 0
 var civilians_killed: int = 0
 var civilians_rescued: int = 0
+var robbers_total: int = 0
 var robbers_downed: int = 0
 var robbers_killed: int = 0
 var player_fired_gun: bool = false
@@ -80,6 +81,7 @@ func reset() -> void:
 	civilians_downed = 0
 	civilians_killed = 0
 	civilians_rescued = 0
+	robbers_total = 0
 	robbers_downed = 0
 	robbers_killed = 0
 	player_fired_gun = false

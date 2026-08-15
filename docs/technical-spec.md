@@ -35,7 +35,8 @@ res://
 │   └── aftermath.tscn / aftermath.gd    # 冒頭とエンディングで共用
 ├── ui/
 │   ├── hud.tscn / hud.gd
-│   └── timestamp_card.tscn
+│   ├── timestamp_card.tscn
+│   └── ending_card.tscn / ending_card.gd
 ├── shaders/
 │   └── phone_cam.gdshader
 └── fx/
@@ -137,6 +138,7 @@ var civilians_total: int = 0
 var civilians_downed: int = 0
 var civilians_killed: int = 0
 var civilians_rescued: int = 0
+var robbers_total: int = 0
 var robbers_downed: int = 0
 var robbers_killed: int = 0
 var player_fired_gun: bool = false
@@ -198,6 +200,14 @@ func reset() -> void:
     ...
 ```
 
+`civilians_total` と同様に、各犯人が `_ready()` で `robbers_total` を加算する。
+`record_down()` は記録だけを担い、全滅時の幕進行は判断しない。各犯人のダウン処理が
+`robbers_downed >= robbers_total` を確認し、`GameDirector.notify_all_robbers_downed()` を呼ぶ。
+
+`elapsed` は `GameDirector` が `INFILTRATION` 進入から `EPILOGUE` 進入まで
+（`INFILTRATION` / `ENGAGEMENT` / `BREACH` 中）加算する。進行を知らない
+`RunState` 自身には `_process()` を置かない。`reset()` で `robbers_total` と `elapsed` も0へ戻す。
+
 ## 5. GameDirector（autoload）
 
 幕の進行を管理する。各幕への移行は**シグナルで通知**し、NPC側が購読する。
@@ -205,8 +215,13 @@ func reset() -> void:
 ```gdscript
 signal act_changed(act: int)
 
+@export var enable_breach: bool = false
 var current_act: int = GameTypes.Act.PROLOGUE
 ```
+
+コンテスト版は `enable_breach = false` とし、警察・第3幕を除いた
+`PROLOGUE → INFILTRATION → ENGAGEMENT → EPILOGUE` を通す。
+8/24以降に警察を実装した時点で `enable_breach = true` に切り替え、BREACH 経路を有効にする。
 
 移行条件:
 
@@ -214,8 +229,9 @@ var current_act: int = GameTypes.Act.PROLOGUE
 |---|---|
 |PROLOGUE → INFILTRATION|冒頭カットシーン終了|
 |INFILTRATION → ENGAGEMENT|犯人のいずれかが `ALERT` になる、または犯人1体がダウン|
-|ENGAGEMENT → BREACH|ENGAGEMENT 開始から `breach_delay` 秒経過。`RunState.player_fired_gun` が true なら `breach_delay` を 40% 短縮する|
-|BREACH → EPILOGUE|犯人3体すべてがダウン|
+|ENGAGEMENT → EPILOGUE|`enable_breach == false` かつ、`RunState.robbers_downed` が `robbers_total` に達する|
+|ENGAGEMENT → BREACH|`enable_breach == true` のときだけタイマーを張る。ENGAGEMENT 開始から `breach_delay` 秒経過。`RunState.player_fired_gun` が true なら `breach_delay` を 40% 短縮する|
+|BREACH → EPILOGUE|`enable_breach == true` かつ、犯人全員がダウン|
 
 ## 6. プレイヤー
 
@@ -410,14 +426,30 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 
 - `Act.PROLOGUE` では `IDLE`
 - `Act.INFILTRATION` 開始で `PRONE`（伏せる）。この姿勢では近接判定が届かない高さになる
-- `Act.BREACH` 以降、出口方向へ `FLEE_ROBBER`
 - **`RunState.civilians_downed > 0` になった時点で、プレイヤーが接近すると `FLEE_PLAYER` へ**。犯人からではなく、彼女から逃げる
 
 `FLEE_PLAYER` への切り替えは `RunState.civilian_downed` シグナルを購読して行う。
+逃走モードではプレイヤーが `flee_trigger_distance` 以内かつ壁越しでない場合に
+`FLEE_PLAYER` へ入り、`NavigationAgent3D` の経路に沿って反対方向へ移動する。
+`flee_stop_distance` まで離れるか、プレイヤーを見失うと、その幕に対応する
+`IDLE` / `PRONE` へ戻る。`DOWNED` / `SHIELDED` 中は逃走判定を行わない。
+
+|`@export`|既定値|用途|
+|---|---:|---|
+|`flee_trigger_distance`|`4.0`|FLEE_PLAYER へ入る接近距離（m）|
+|`flee_speed`|`3.0`|逃走速度（m/s）|
+|`flee_stop_distance`|`7.0`|通常姿勢へ戻る距離（m）|
+|`flee_path_distance`|`8.0`|停止距離の外側に置くナビゲーション目標距離（m）|
+|`flee_eye_height`|`1.0`|壁越し判定のレイ高さ（m）|
+|`player_group`|`player`|プレイヤー探索グループ|
+|`flee_obstacle_mask`|`world`（layer 1）|見失い判定を遮るレイヤー|
+
+`FLEE_ROBBER` は `Act.BREACH` 以降の仕様だが、コンテスト版では BREACH を作らないため
+実装しない。8/24以降に警察と BREACH を有効化する際の対象とする。
 
 #### 最小実装の状況（8/22 分の前倒し）
 
-`actors/npc/civilian.gd` + `actors/npc/civilian.tscn`。IDLE / PRONE / SHIELDED / STAGGERED / DOWNED の5ステートを実装済み。`FLEE_ROBBER` / `FLEE_PLAYER` は8/22に実装するため、enum にだけ定義して遷移は未実装。
+`actors/npc/civilian.gd` + `actors/npc/civilian.tscn`。IDLE / PRONE / FLEE_PLAYER / SHIELDED / STAGGERED / DOWNED の6ステートを実装済み。FLEE_ROBBER は上記理由により enum のみ。
 
 - **見た目はプリミティブ**（カプセル）。犯人と同様に見た目を `Model` 子ノード1個へ隔離し、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下に置く。`Model` 以下にロジックもコリジョンも置かない。最終モデルへの差し替えは8/24以降（`docs/game-design.md` §7.1）
 - **幕への追従**は `GameDirector.act_changed` を購読する。PROLOGUE は IDLE、INFILTRATION 以降は PRONE。INFILTRATION 以降に生成した個体も `_ready()` から直接 PRONE へ入る
@@ -808,6 +840,12 @@ M6 時点ではデバッグ用の文字表示のままでよい。本実装は M
 - タイムスタンプカード（各幕の頭に数秒間フェード表示）
 
 ロックオンマーカーの HUD 実装までは、`lock_on.gd` が対象頭上へ出す unshaded の暫定3Dマーカーで代用する。この表示は8/24の HUD 実装で置き換える。
+
+`ui/ending_card.tscn` + `ui/ending_card.gd` は `GameDirector.act_changed` を購読し、
+`EPILOGUE` で全画面の暗い半透明背景と、分岐名・犯人/客のダウン/死亡数・経過時間を表示する。
+表示中は `SceneTree.paused = true`、カード自身は `PROCESS_MODE_ALWAYS` とする。
+`ui_accept`（Enter / Space）で `RunState.reset()` → `GameDirector.reset()` → 現在シーン再読込の順にやり直す。
+現状は縦切り用の文字表示のみで、8/24以降にニュース放送・Aftermath へ発展させる。
 
 アクセントカラーは `RunState.deviation_changed` を購読し、ベース色 `#5A4C97` から色相を赤方向へシフトさせる。
 
