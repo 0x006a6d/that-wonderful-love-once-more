@@ -4,6 +4,7 @@ extends Node
 
 const ERRATIC_SCENE: PackedScene = preload("res://actors/npc/roles/erratic.tscn")
 const CIVILIAN_SCENE: PackedScene = preload("res://actors/npc/civilian.tscn")
+const ROBBER_SCENE: PackedScene = preload("res://actors/npc/robber.tscn")
 const SHOOT_INTERVAL: float = 0.10
 const SHOOT_TELEGRAPH: float = 0.05
 const SETTLE_FRAMES: int = 6
@@ -28,14 +29,29 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("=== 不安定型 検証開始 ===")
+	await _test_scene_defaults()
 	await _test_prologue_does_not_shoot()
 	await _test_interval_nearest_and_failure()
 	await _test_occlusion()
 	await _test_downed_robber_stops()
 	await _test_melee_filter_but_shot_passes()
+	await _test_robber_does_not_block_civilian_shot()
 	await _test_random_patrol_order()
 	await _clear_world()
 	_finish()
+
+
+func _test_scene_defaults() -> void:
+	await _new_world()
+	var erratic := ERRATIC_SCENE.instantiate() as Erratic
+	erratic.set_physics_process(false)
+	_actors.add_child(erratic)
+	var gun := erratic.get_node("MuzzlePoint/HitscanGun") as HitscanGun
+	print("[erratic defaults] shoot_civilian_interval=%.1f sec / ignore_groups=%s" %
+		[erratic.shoot_civilian_interval, str(gun.ignore_groups)])
+	_assert("0. シーン既定値は射撃間隔15秒・仲間の犯人を除外",
+		is_equal_approx(erratic.shoot_civilian_interval, 15.0)
+		and gun.ignore_groups.has(&"robber"))
 
 
 func _test_prologue_does_not_shoot() -> void:
@@ -71,8 +87,8 @@ func _test_interval_nearest_and_failure() -> void:
 		[elapsed, erratic.shoot_civilian_interval, erratic.shoot_telegraph_duration])
 	_assert("2. INFILTRATION 以降は shoot_civilian_interval 経過後に撃つ",
 		_shot_bodies.size() == 1 and elapsed >= erratic.shoot_civilian_interval)
-	_assert("3. stagger_threshold=3 の客も銃撃1発でダウンする",
-		near_health.stagger_threshold == 3 and near_health.is_downed())
+	_assert("3. stagger_threshold=2 の客も銃撃1発でダウンする",
+		near_health.stagger_threshold == 2 and near_health.is_downed())
 	print("[RunState] downed=%d killed=%d records=%d" %
 		[RunState.civilians_downed, RunState.civilians_killed, RunState.downed.size()])
 	_assert("4. 銃撃ダウンで RunState.civilians_killed が増える",
@@ -171,6 +187,31 @@ func _test_melee_filter_but_shot_passes() -> void:
 		[hp_before, hp_after_melee, health.current_hp()])
 	_assert("11. 犯人の近接は客を除外し、同じ客へ銃撃だけが通る",
 		is_equal_approx(hp_before, hp_after_melee) and health.is_downed())
+
+
+func _test_robber_does_not_block_civilian_shot() -> void:
+	await _new_world()
+	var civilian := _spawn_civilian(FAR_POSITION)
+	var erratic := _spawn_erratic(Vector3.ZERO)
+	var ally := ROBBER_SCENE.instantiate() as Robber
+	ally.position = NEAR_POSITION
+	_actors.add_child(ally)
+	ally.set_physics_process(false)
+	await _wait_frames(SETTLE_FRAMES)
+	var gun := erratic.get_node("MuzzlePoint/HitscanGun") as HitscanGun
+	var ally_health := ally.get_node("Health") as Health
+	var civilian_health := civilian.get_node("Health") as Health
+	var aim := civilian.global_position + Vector3.UP * erratic.civilian_aim_height
+	var clear_through_ally := gun.has_clear_shot(civilian, aim)
+	var hit_body := gun.fire_at(aim)
+	await get_tree().physics_frame
+	print(("[ally before civilian] clear=%s hit=%s ally HP=%.1f civilian HP=%.1f " +
+		"killed=%d") % [str(clear_through_ally), str(hit_body),
+		ally_health.current_hp(), civilian_health.current_hp(), RunState.civilians_killed])
+	_assert("11b. 客との直線上の仲間は被弾せず、射線を止めずに客へ命中する",
+		clear_through_ally and hit_body == civilian
+		and is_equal_approx(ally_health.current_hp(), ally_health.max_hp)
+		and civilian_health.is_downed() and RunState.civilians_killed == 1)
 
 
 func _test_random_patrol_order() -> void:

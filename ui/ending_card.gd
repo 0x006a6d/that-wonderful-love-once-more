@@ -37,9 +37,14 @@ func show_ending() -> void:
 		_title.text = _ending_name(ending)
 	if _details != null:
 		_details.text = (
-			"犯人ダウン数: %d\n犯人死亡数: %d\n客ダウン数: %d\n客死亡数: %d\n経過時間: %.1f 秒\n\nEnter でやり直し"
+			("犯人: 無力化 %d（うち死亡 %d / 自分による無力化 %d / 自分による死亡 %d）\n" +
+			"客: 無力化 %d（うち死亡 %d / 自分による無力化 %d / 自分による死亡 %d）\n" +
+			"経過時間: %.1f 秒\n\nEnter でやり直し")
 			% [RunState.robbers_downed, RunState.robbers_killed,
-				RunState.civilians_downed, RunState.civilians_killed, RunState.elapsed]
+				RunState.robbers_downed_by_player, RunState.robbers_killed_by_player,
+				RunState.civilians_downed, RunState.civilians_killed,
+				RunState.civilians_downed_by_player, RunState.civilians_killed_by_player,
+				RunState.elapsed]
 		)
 	if _screen != null:
 		_screen.visible = true

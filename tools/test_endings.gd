@@ -29,8 +29,11 @@ func _run() -> void:
 
 	await _test_act_flow_elapsed_and_ideal()
 	await _test_normal_finish_case()
+	await _test_erratic_civilian_attribution()
+	await _test_player_civilian_attribution()
 	await _test_ending_case(GameTypes.Ending.DRIFT, "逸脱", 3, false)
 	await _test_ending_case(GameTypes.Ending.FAILURE, "失敗", 1, true, true)
+	_test_resolve_ending_regression()
 
 	GameDirector.enable_breach = _original_breach_enabled
 	GameDirector.breach_delay = _original_breach_delay
@@ -98,9 +101,77 @@ func _test_normal_finish_case() -> void:
 	_assert("通常: 実際の再ロック＋2回の追い打ち経路で判定へ到達する",
 		finish_path_ok and GameDirector.current_act == GameTypes.Act.EPILOGUE
 		and RunState.resolve_ending() == GameTypes.Ending.NORMAL and clean_conditions)
+	_assert("通常: プレイヤーの追い打ちは robbers_killed_by_player に記録される",
+		RunState.robbers_killed_by_player == 1)
 	_assert("通常: 表示名が判定結果と一致する",
 		card != null and card.is_displayed() and card.displayed_title() == "通常")
 	await _free_lobby(lobby)
+
+
+func _test_erratic_civilian_attribution() -> void:
+	await _reset_without_lobby()
+	var lobby := await _spawn_lobby()
+	if lobby == null:
+		_assert("不安定型の加害者記録ケースでロビーを読み込める", false)
+		return
+	var erratic := lobby.get_node_or_null(^"RobberErratic") as Erratic
+	var civilian := lobby.get_node_or_null(^"Civilian1") as Civilian
+	var gun := erratic.get_node_or_null(erratic.hitscan_gun_path) as HitscanGun
+	var hurtbox := civilian.get_node_or_null(civilian.hurtbox_path) as Hurtbox
+	var health := civilian.get_node_or_null(civilian.health_path) as Health
+	if erratic != null and civilian != null and gun != null and hurtbox != null and health != null:
+		hurtbox.receive_shot(erratic, gun.damage, gun.lethal, gun.ignore_stagger_threshold)
+	print("[erratic attribution] killed=%d / killed_by_player=%d / attacker=%s" %
+		[RunState.civilians_killed, RunState.civilians_killed_by_player,
+		str(RunState.downed[0].attacker if not RunState.downed.is_empty() else null)])
+	_assert("不安定型が客を殺すと総死亡数だけ増え、プレイヤー死亡数は増えない",
+		health != null and health.is_downed() and RunState.civilians_killed == 1
+		and RunState.civilians_killed_by_player == 0
+		and not RunState.downed.is_empty() and RunState.downed[0].attacker == erratic)
+	await _free_lobby(lobby)
+
+
+func _test_player_civilian_attribution() -> void:
+	await _reset_without_lobby()
+	var lobby := await _spawn_lobby()
+	if lobby == null:
+		_assert("プレイヤーの客ダウン記録ケースでロビーを読み込める", false)
+		return
+	var player := lobby.get_node_or_null(^"Player") as Node3D
+	var civilian := lobby.get_node_or_null(^"Civilian1") as Civilian
+	var hitbox := player.get_node_or_null(^"Model/MeleeHitbox") as Hitbox
+	var hurtbox := civilian.get_node_or_null(civilian.hurtbox_path) as Hurtbox
+	var health := civilian.get_node_or_null(civilian.health_path) as Health
+	if player != null and civilian != null and hitbox != null and hurtbox != null and health != null:
+		hitbox.exempt_body = civilian
+		for _hit: int in range(health.stagger_threshold):
+			hitbox.configure(health.max_hp, 0.0, false)
+			hitbox.call("_try_hit", hurtbox)
+	print("[player civilian attribution] threshold=%d downed=%d / by_player=%d" %
+		[health.stagger_threshold if health != null else -1,
+		RunState.civilians_downed, RunState.civilians_downed_by_player])
+	_assert("プレイヤーが客を2回でダウンさせると civilians_downed_by_player が増える",
+		health != null and health.stagger_threshold == 2 and health.is_downed()
+		and RunState.civilians_downed == 1 and RunState.civilians_downed_by_player == 1
+		and RunState.civilians_killed_by_player == 0)
+	await _free_lobby(lobby)
+
+
+func _test_resolve_ending_regression() -> void:
+	RunState.reset()
+	var ideal := RunState.resolve_ending()
+	RunState.robbers_killed = 1
+	var normal := RunState.resolve_ending()
+	RunState.reset()
+	RunState.civilians_downed = 3
+	var drift := RunState.resolve_ending()
+	RunState.civilians_killed = 1
+	var failure := RunState.resolve_ending()
+	print("[resolve regression] ideal=%d normal=%d drift=%d failure=%d" %
+		[ideal, normal, drift, failure])
+	_assert("resolve_ending の4分岐は加害者集計の追加後も従来どおり",
+		ideal == GameTypes.Ending.IDEAL and normal == GameTypes.Ending.NORMAL
+		and drift == GameTypes.Ending.DRIFT and failure == GameTypes.Ending.FAILURE)
 
 
 func _test_ending_case(expected: int, expected_title: String,

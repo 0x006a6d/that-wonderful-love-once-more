@@ -131,7 +131,7 @@ func _test_civilian_excluded() -> void:
 	await _wait_frames(SETTLE_FRAMES)
 	var detector := _lock_on(player)
 	var health := civilian.get_node(^"Health") as Health
-	health.finished.connect(func() -> void: _civilian_finished += 1)
+	health.finished.connect(func(_attacker: Node3D) -> void: _civilian_finished += 1)
 	for _hit: int in range(health.stagger_threshold):
 		health.take_hit(health.max_hp)
 	await _wait_frames(2)

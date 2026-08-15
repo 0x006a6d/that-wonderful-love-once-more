@@ -131,6 +131,7 @@ class DownedRecord:
     var position: Vector3
     var basis: Basis
     var lethal: bool
+    var attacker: Node3D
 
 signal civilian_downed(total: int)
 signal deviation_changed(level: int)
@@ -138,23 +139,29 @@ signal deviation_changed(level: int)
 var civilians_total: int = 0
 var civilians_downed: int = 0
 var civilians_killed: int = 0
+var civilians_downed_by_player: int = 0
+var civilians_killed_by_player: int = 0
 var civilians_rescued: int = 0
 var robbers_total: int = 0
 var robbers_downed: int = 0
 var robbers_killed: int = 0
+var robbers_downed_by_player: int = 0
+var robbers_killed_by_player: int = 0
 var player_fired_gun: bool = false
 var elapsed: float = 0.0
 
 var downed: Array[DownedRecord] = []
 
 
-func record_down(body: Node3D, faction: int, lethal: bool) -> void:
+func record_down(body: Node3D, faction: int, lethal: bool,
+        attacker: Node3D = null) -> void:
     var r := DownedRecord.new()
 	r.body = body
     r.faction = faction
     r.position = body.global_position
     r.basis = body.global_transform.basis
     r.lethal = lethal
+    r.attacker = attacker
     downed.append(r)
 
     match faction:
@@ -170,13 +177,14 @@ func record_down(body: Node3D, faction: int, lethal: bool) -> void:
                 robbers_killed += 1
 
 
-func mark_down_lethal(body: Node3D) -> void:
+func mark_down_lethal(body: Node3D, attacker: Node3D = null) -> void:
     for r: DownedRecord in downed:
         if r.body != body:
             continue
         if r.lethal:
             return
         r.lethal = true
+        r.attacker = attacker
         match r.faction:
             GameTypes.Faction.CIVILIAN:
                 civilians_killed += 1
@@ -227,9 +235,20 @@ func reset() -> void:
 `RunState` 自身には `_process()` を置かない。`reset()` で `robbers_total` と `elapsed` も0へ戻す。
 
 `DownedRecord.body` は、ダウン時の非致死記録を同じ本体への追い打ち成立後に更新するための
-参照である。`mark_down_lethal(body)` は該当記録の `lethal` を `true` にし、陣営別の
+参照である。`mark_down_lethal(body, attacker)` は該当記録の `lethal` を `true` にし、陣営別の
 死亡数を1回だけ増やす。既に致死の記録へ再度呼んでも二重集計しない。進行判断は引き続き
 犯人側に置き、`RunState` は記録更新だけを担う。
+
+`DownedRecord.attacker` はダウンを成立させた加害者を保持し、追い打ち時は
+`mark_down_lethal(body, attacker)` が致死化を成立させた加害者へ更新する。NPC本体が Hurtbox
+から最後の加害者を受け取り、`record_down()` へ渡すため、RunState は攻撃経路や役割を判断しない。
+加害者が `player` グループに属する場合だけ、陣営別の
+`civilians_downed_by_player` / `civilians_killed_by_player` /
+`robbers_downed_by_player` / `robbers_killed_by_player` を増やす。プレイヤーノードの直接参照は
+持たず、`reset()` はこの4集計も0へ戻す。
+
+`resolve_ending()` の条件と評価順は変更しない。総ダウン数・総死亡数は従来どおり加害者を
+問わず集計し、`*_by_player` は記録と結果表示だけに使う。
 
 ## 5. GameDirector（autoload）
 
@@ -358,7 +377,7 @@ func _disable_hitbox() -> void:
 1. `LockOnDetector` で客をロックオン中
 2. その状態で攻撃入力が行われた
 
-さらに客の `Health` は `stagger_threshold` を持ち、規定回数（既定3回）に達するまでダウンしない。誤爆でエンディングが壊れることを防ぐ。
+さらに客の `Health` は `stagger_threshold` を持ち、規定回数（既定2回）に達するまでダウンしない。誤爆でエンディングが壊れることを防ぐ。
 
 `LockOnDetector` は犯人と客の両方を対象にし、`lock_on` 入力を押すたびに取得／解除をトグルする。プレイヤーの `MeleeHitbox` は `ignore_groups = ["civilian"]` を維持したまま、現在のロックオン対象を `exempt_body` に指定する。`target == exempt_body` の場合だけ `ignore_groups` の除外を無視するため、ロックオン中の客本人にだけ近接が通り、周囲の別の客には通らない。配列を実行時に in-place 変更しないので、別インスタンスへ設定が波及しない。犯人の近接は `exempt_body` を使わず、`["robber", "civilian"]` の除外を維持する。ロックは対象のダウン、16.0 m 超への離脱、0.6秒の連続遮蔽、対象のツリー退出で自動解除する。
 
@@ -386,7 +405,8 @@ func _disable_hitbox() -> void:
 
 `Hurtbox.receive_hit()` はダウン中、`Hitbox.exempt_body` が本体と一致する場合だけ
 `take_finish_hit()` へ振り分ける。追い打ちでは通常ダメージとノックバックを与えない。
-犯人は `Health.finished` を購読して `RunState.mark_down_lethal(self)` を呼ぶ。
+犯人は加害者を伴う `Health.finished(attacker)` を購読して
+`RunState.mark_down_lethal(self, attacker)` を呼ぶ。
 
 客の遺体は追い打ち対象外とする。ダウン時の Hurtbox を完全に切ったままにし、公開問い合わせも
 持たせない。客への「失敗」分岐に新たな事故経路を増やさないためである。追い打ち成立後も
@@ -410,24 +430,24 @@ func _disable_hitbox() -> void:
 
 ```gdscript
 @export var max_hp: float = 100.0
-@export var stagger_threshold: int = 1     # 客は 3
+@export var stagger_threshold: int = 1     # 客はシーン設定で 2
 @export var finish_hits: int = 2
 
 signal staggered()
 signal downed(lethal: bool)
-signal finished()
+signal finished(attacker: Node3D)
 
 func take_hit(damage: float, lethal: bool = false,
         ignore_stagger_threshold: bool = false) -> void
-func take_finish_hit() -> void
+func take_finish_hit(attacker: Node3D = null) -> void
 ```
 
 致死判定は攻撃側が持ち、近接は `Hurtbox.receive_hit()` から `Health.take_hit(damage, lethal)`、銃撃は `Hurtbox.receive_shot()` から第3引数も含めて渡す。近接は `lethal = false`、銃撃は `lethal = true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
 
 `stagger_threshold` は `docs/game-design.md` §6.2 の「段階の設置」にあたり、広い近接判定の誤爆で客がダウンするのを防ぐ下限である。近接は既定の `ignore_stagger_threshold = false` のまま下限を適用する。狙って撃つ銃撃は `true` を渡し、HPが0なら被弾回数にかかわらずダウンさせる。既定値は `false` のため、既存の `take_hit()` 呼び出しの挙動は変わらない。
 
-`take_finish_hit()` はダウン済みの場合だけ内部カウンタを増やし、`finish_hits` 回目に
-`finished` を1回だけ送る。その後の呼び出しでは再送しない。`revive()` はHP・よろけ回数に
+`take_finish_hit(attacker)` はダウン済みの場合だけ内部カウンタを増やし、`finish_hits` 回目に
+加害者を伴う `finished(attacker)` を1回だけ送る。その後の呼び出しでは再送しない。`revive()` はHP・よろけ回数に
 加えて追い打ちカウンタと送信済み状態も初期化する。通常の `take_hit()` はダウン中の被弾を
 従来どおり弾く。
 
@@ -455,9 +475,13 @@ func time_in_state() -> float
 
 `actors/shared/hitscan_gun.gd`（`HitscanGun`）を犯人の銃撃で共有する。`Node3D` である自身の位置を銃口とし、`fire_at(target_position)` が命中した `Hurtbox` の本体を返す。発砲時は `shot_fired(from, to, hit_body)` を通知する。銃声・マズルフラッシュ・弾道はここでは作らず、8/24 の演出フェーズからこのシグナルへ接続する。
 
-レイのマスクは layer 1（`world`）と layer 7（`hurtbox`）の和で、`collide_with_areas = true` とする。射手本体と射手自身の Hurtbox は除外する。最初の交点だけを採用するため、壁が先ならダメージを与えず、Hurtbox が先なら `Hurtbox.receive_shot()` から `Health.take_hit(damage, lethal, ignore_stagger_threshold)` へ渡す。
+レイのマスクは layer 1（`world`）と layer 7（`hurtbox`）の和で、`collide_with_areas = true` とする。射手本体と射手自身の Hurtbox は除外する。最初の交点だけを採用するため、壁が先ならダメージを与えず、Hurtbox が先なら `Hurtbox.receive_shot()` から `Health.take_hit(damage, lethal, ignore_stagger_threshold)` へ渡す。`shooter` は同時に NPC 本体へ最後の加害者として渡す。
 
-銃撃には `Hitbox.ignore_groups` を適用しない。不安定型が客を撃つ経路と、リーダーの盾越しに客へ当たる経路の両方で、射線上の客へ弾を通す必要があるためである。`has_clear_shot()` は同じレイ条件で発砲せずに射線を確認し、遮蔽された対象を狙って射撃間隔を消費することを防ぐ。`has_clear_shot_from()` は同じ判定を任意の始点から行い、銃持ちが移動前の遮蔽マーカーからプレイヤーへの射線を評価する。
+`HitscanGun.ignore_groups` は、その銃が命中させない本体グループを指定する。該当 Hurtbox に
+交差した場合は、その本体の Hurtbox をレイから除外して同じ始点から再検索する。したがって
+仲間はダメージを受けず、壁のように射線を止めることもなく、背後のプレイヤーや客へ弾が届く。
+`has_clear_shot()` / `has_clear_shot_from()` も同じ透過規則を使う。不安定型と銃持ちは
+`ignore_groups = ["robber"]`、客は除外しない。客を狙う経路と流れ弾が客へ当たる仕様を維持する。
 
 `HitscanGun` の設定は役割ごとに異なる。不安定型は客を処刑する時間圧を作るため `damage = 100.0` / `ignore_stagger_threshold = true` として一発でダウンさせる。銃持ちはプレイヤーとの撃ち合いを成立させるため `damage = 20.0` / `ignore_stagger_threshold = false` とし、一発ではダウンさせない。処刑と撃ち合いでは求められる強さが異なるためである。どちらも銃撃によるダウンを致死として記録する `lethal = true` は共通とする。
 
@@ -467,6 +491,7 @@ func time_in_state() -> float
 |`lethal`|`true`|致死として記録するか|
 |`ignore_stagger_threshold`|`true`|近接用のよろけ回数下限を無視するか|
 |`max_range`|`30.0`|射程（m）|
+|`ignore_groups`|`[]`|命中せず、射線も止めない本体グループ|
 
 ## 8. 客（Civilian）
 
@@ -507,8 +532,8 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 - **見た目はプリミティブ**（カプセル）。犯人と同様に見た目を `Model` 子ノード1個へ隔離し、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下に置く。`Model` 以下にロジックもコリジョンも置かない。最終モデルへの差し替えは8/24以降（`docs/game-design.md` §7.1）
 - **幕への追従**は `GameDirector.act_changed` を購読する。PROLOGUE は IDLE、INFILTRATION 以降は PRONE。INFILTRATION 以降に生成した個体も `_ready()` から直接 PRONE へ入る
 - **伏せ姿勢**は `Model` と Hurtbox のカプセルを X 軸に90度回して下げる。各本体原点を基準とした実測で、通常の PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており、ロックオンしていない間は近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
-- **誤爆防止**は `Health.stagger_threshold = 3`。HPが先に0になっても3回目までは STAGGERED に留まり、一定時間後に直前の IDLE / PRONE へ戻る
-- **ダウン**は固定ポーズ。`Health.downed(lethal)` の値をそのまま `RunState.record_down(self, Faction.CIVILIAN, lethal)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
+- **誤爆防止**は `Health.stagger_threshold = 2`。1回目は STAGGERED に留まり、2回目で DOWNED になる。1発の誤爆では倒れない段階性を維持しつつ、実機で195.6秒のプレイ中に客6人が全滅し、「ロックオン＋3回」が必要な逸脱ルートが現実的でなかったため1回分緩和した
+- **ダウン**は固定ポーズ。`Health.downed(lethal)` と本体が保持した最後の加害者を `RunState.record_down(self, Faction.CIVILIAN, lethal, attacker)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
 - **致死判定は攻撃側**が持つ方式で確定。近接の `Hitbox.lethal` は `false`、不安定型の `HitscanGun.lethal` は `true`。銃撃は `ignore_stagger_threshold = true` も渡し、客を1発でダウンさせる
 - **ロックオンを実装済み**。プレイヤーは PRONE を含む犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。`set_melee_targetable(enabled)` はロック中の PRONE Hurtbox の高さだけを `targeted_hurtbox_height = 0.8` へ上げ、解除時はその時点のステートに応じた高さへ戻す。DOWNED / SHIELDED 進入時にも対象化を破棄し、高さが取り残されないようにする。別の客と犯人側の近接は従来どおり `ignore_groups` と通常の伏せ高さで除外する
 - **リーダーからの保持API**として `enter_shielded(holder)` / `exit_shielded()` を公開する。客は `holder` の参照を保存せず、位置と向きはリーダー側が毎フレーム更新する。SHIELDED 中は IDLE と同じ立ち姿・Hurtbox を使い、幕が変わっても伏せない。解除時点の幕が PROLOGUE なら IDLE、それ以外なら PRONE へ戻る。軽い被弾では保持姿勢を維持し、ダウン時だけ DOWNED へ移る。識別色 `color_shielded = Color(0.82, 0.52, 0.18)` も `@export` とする
@@ -588,7 +613,7 @@ NavigationAgent3D / ステートマシンを重複させない。共通の `Robb
 
 |項目|既定値|用途|
 |---|---:|---|
-|`shoot_civilian_interval`|`8.0`|客を狙い始める間隔（秒）|
+|`shoot_civilian_interval`|`15.0`|客を狙い始める間隔（秒）。実機で195.6秒のプレイ中に客6人が全滅し、逸脱ルートが現実的でなかったため従来8.0秒から延長|
 |`shoot_telegraph_duration`|`0.6`|向き直ってから発砲するまでの予備動作（秒）|
 |`civilian_aim_height`|`0.35`|客本体の原点から狙う高さ（m）|
 |`patrol_wait_variation`|`0.75`|`patrol_wait` の前後へ加える待ち時間の幅（秒）|
@@ -895,7 +920,8 @@ M6 時点ではデバッグ用の文字表示のままでよい。本実装は M
 ロックオンマーカーの HUD 実装までは、`lock_on.gd` が対象頭上へ出す unshaded の暫定3Dマーカーで代用する。この表示は8/24の HUD 実装で置き換える。
 
 `ui/ending_card.tscn` + `ui/ending_card.gd` は `GameDirector.act_changed` を購読し、
-`EPILOGUE` で全画面の暗い半透明背景と、分岐名・犯人/客のダウン/死亡数・経過時間を表示する。
+`EPILOGUE` で全画面の暗い半透明背景と、分岐名・犯人/客の無力化総数（死亡を含む）・
+そのうちの死亡数・プレイヤーによる無力化数/死亡数・経過時間を表示する。
 表示中は `SceneTree.paused = true`、カード自身は `PROCESS_MODE_ALWAYS` とする。
 `ui_accept`（Enter / Space）で `RunState.reset()` → `GameDirector.reset()` → 現在シーン再読込の順にやり直す。
 現状は縦切り用の文字表示のみで、8/24以降にニュース放送・Aftermath へ発展させる。

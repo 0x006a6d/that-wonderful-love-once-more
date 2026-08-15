@@ -15,7 +15,7 @@ class_name Health
 
 ## 最大HP。
 @export var max_hp: float = 100.0
-## ダウンに要する最低被弾回数。客は 3（誤爆防止）、犯人・ダミーは 1。
+## ダウンに要する最低被弾回数。客は 2（誤爆防止）、犯人・ダミーは 1。
 @export var stagger_threshold: int = 1
 ## ダウン後に追い打ち成立とする命中回数。
 @export var finish_hits: int = 2
@@ -23,8 +23,8 @@ class_name Health
 signal staggered()
 ## ダウンした。lethal=true なら致死（攻撃側の Hitbox.lethal から渡される）。
 signal downed(lethal: bool)
-## ダウン後の追い打ちが規定回数に達した。
-signal finished()
+## ダウン後の追い打ちが規定回数に達した。attacker は成立させた加害者。
+signal finished(attacker: Node3D)
 
 var _hp: float = 0.0
 var _stagger_count: int = 0
@@ -58,13 +58,13 @@ func take_hit(damage: float, lethal: bool = false,
 
 ## ダウン後の追い打ちを1回受ける。通常被弾とは独立させ、規定回数に
 ## 達した瞬間だけ finished を通知する。
-func take_finish_hit() -> void:
+func take_finish_hit(attacker: Node3D = null) -> void:
 	if not _is_downed or _finished_emitted:
 		return
 	_finish_hit_count += 1
 	if _finish_hit_count >= finish_hits:
 		_finished_emitted = true
-		finished.emit()
+		finished.emit(attacker)
 
 
 func current_hp() -> float:

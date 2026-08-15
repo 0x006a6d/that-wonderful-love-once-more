@@ -42,13 +42,10 @@ func _run() -> void:
 		and not first_health.is_downed()
 	)
 	first_health.take_hit(first_health.max_hp)
-	var second_hit_staggered: bool = (
-		int(first.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.STAGGERED
-		and not first_health.is_downed()
-	)
-	first_health.take_hit(first_health.max_hp)
-	_assert("stagger_threshold=3 により1・2回目は STAGGERED、3回目で DOWNED",
-		first_hit_staggered and second_hit_staggered
+	print("[stagger threshold] configured=%d / downed_after_second=%s" %
+		[first_health.stagger_threshold, str(first_health.is_downed())])
+	_assert("stagger_threshold=2 により1回目は STAGGERED、2回目で DOWNED",
+		first_health.stagger_threshold == 2 and first_hit_staggered
 		and int(first.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.DOWNED
 		and first_health.is_downed())
 	_assert("非致死ダウンで civilians_downed のみ増える",
@@ -62,7 +59,6 @@ func _run() -> void:
 	var late_health := late.get_node("Health") as Health
 	late_health.take_hit(late_health.max_hp, true)
 	late_health.take_hit(late_health.max_hp, true)
-	late_health.take_hit(late_health.max_hp, true)
 	_assert("lethal=true のダウンで civilians_killed も増える",
 		int(late.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.DOWNED
 		and RunState.civilians_downed == 2 and RunState.civilians_killed == 1)
@@ -74,8 +70,8 @@ func _run() -> void:
 	var nonlethal: Node3D = _spawn_civilian()
 	var nonlethal_health := nonlethal.get_node("Health") as Health
 	var nonlethal_hitbox := _spawn_test_hitbox(nonlethal)
-	await _hit_three_times(nonlethal_hitbox, nonlethal, nonlethal_health.max_hp, false)
-	_assert("Hitbox 経由の非致死3回で civilians_downed のみ増える",
+	await _hit_to_threshold(nonlethal_hitbox, nonlethal, nonlethal_health, false)
+	_assert("Hitbox 経由の非致死2回で civilians_downed のみ増える",
 		int(nonlethal.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.DOWNED
 		and nonlethal_health.is_downed()
 		and RunState.civilians_downed == 1 and RunState.civilians_killed == 0)
@@ -87,8 +83,8 @@ func _run() -> void:
 	var lethal: Node3D = _spawn_civilian()
 	var lethal_health := lethal.get_node("Health") as Health
 	var lethal_hitbox := _spawn_test_hitbox(lethal)
-	await _hit_three_times(lethal_hitbox, lethal, lethal_health.max_hp, true)
-	_assert("Hitbox 経由の lethal=true 3回で civilians_killed も増える",
+	await _hit_to_threshold(lethal_hitbox, lethal, lethal_health, true)
+	_assert("Hitbox 経由の lethal=true 2回で civilians_killed も増える",
 		int(lethal.call("current_state")) == CIVILIAN_SCRIPT.CivilianState.DOWNED
 		and lethal_health.is_downed()
 		and RunState.civilians_downed == 1 and RunState.civilians_killed == 1)
@@ -217,10 +213,11 @@ func _spawn_test_hitbox(target: Node3D) -> Hitbox:
 	return hitbox
 
 
-func _hit_three_times(hitbox: Hitbox, target: Node3D, damage: float, lethal: bool) -> void:
-	for _hit: int in range(3):
+func _hit_to_threshold(hitbox: Hitbox, target: Node3D, health: Health,
+		lethal: bool) -> void:
+	for _hit: int in range(health.stagger_threshold):
 		hitbox.global_position = _hurtbox_center(target)
-		hitbox.configure(damage, 0.0, lethal)
+		hitbox.configure(health.max_hp, 0.0, lethal)
 		hitbox.activate()
 		for _frame: int in range(SETTLE_FRAMES):
 			await get_tree().physics_frame

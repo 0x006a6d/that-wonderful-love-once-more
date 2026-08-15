@@ -15,6 +15,8 @@ const HURTBOX_MASK: int = 1 << 6
 @export var ignore_stagger_threshold: bool = true
 ## 射程（m）。
 @export var max_range: float = 30.0
+## この銃が命中対象から除外する本体グループ。除外対象は射線も遮らない。
+@export var ignore_groups: Array[StringName] = []
 
 ## 発砲した。to は壁または Hurtbox との交点、外れた場合は射程端。
 signal shot_fired(from: Vector3, to: Vector3, hit_body: Node3D)
@@ -65,11 +67,27 @@ func _cast_ray_from(from: Vector3, to: Vector3) -> Dictionary:
 		excluded.append((shooter as CollisionObject3D).get_rid())
 	if shooter != null:
 		_append_hurtbox_exclusions(shooter, excluded)
-	var query := PhysicsRayQueryParameters3D.create(
-		from, to, WORLD_MASK | HURTBOX_MASK, excluded)
-	query.collide_with_areas = true
-	query.collide_with_bodies = true
-	return get_world_3d().direct_space_state.intersect_ray(query)
+	while true:
+		var query := PhysicsRayQueryParameters3D.create(
+			from, to, WORLD_MASK | HURTBOX_MASK, excluded)
+		query.collide_with_areas = true
+		query.collide_with_bodies = true
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			return {}
+		var hurtbox := hit.get("collider") as Hurtbox
+		if hurtbox == null:
+			return hit
+		var hit_body := hurtbox.owner_body()
+		if hit_body == null or not _is_ignored_body(hit_body):
+			return hit
+		# 仲間の Hurtbox をすべて次のレイから外し、同じ始点から再検索する。
+		# 始点を交点まで進めないため、仲間の直後にある壁も貫通しない。
+		_append_hurtbox_exclusions(hit_body, excluded)
+		var hurtbox_rid := hurtbox.get_rid()
+		if not excluded.has(hurtbox_rid):
+			excluded.append(hurtbox_rid)
+	return {}
 
 
 func _append_hurtbox_exclusions(node: Node, excluded: Array[RID]) -> void:
@@ -77,6 +95,13 @@ func _append_hurtbox_exclusions(node: Node, excluded: Array[RID]) -> void:
 		if child is Hurtbox:
 			excluded.append((child as Hurtbox).get_rid())
 		_append_hurtbox_exclusions(child, excluded)
+
+
+func _is_ignored_body(body: Node3D) -> bool:
+	for group: StringName in ignore_groups:
+		if body.is_in_group(group):
+			return true
+	return false
 
 
 func _body_from_hit(hit: Dictionary) -> Node3D:

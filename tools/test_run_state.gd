@@ -21,6 +21,7 @@ func _ready() -> void:
 	_test_ending_priority_failure_over_drift()
 	_test_deviation_level()
 	_test_police_threat_level()
+	_test_attacker_counts()
 	_test_mark_down_lethal()
 	_test_health_finish_reset()
 	_test_reset()
@@ -150,36 +151,93 @@ func _test_police_threat_level() -> void:
 
 # --- ダウン後の致死更新 ---
 
+func _test_attacker_counts() -> void:
+	RunState.reset()
+	var player := Node3D.new()
+	var robber_attacker := Node3D.new()
+	var civilian_by_player := Node3D.new()
+	var civilian_by_robber := Node3D.new()
+	var robber_by_player := Node3D.new()
+	var robber_by_robber := Node3D.new()
+	for node: Node3D in [player, robber_attacker, civilian_by_player,
+			civilian_by_robber, robber_by_player, robber_by_robber]:
+		add_child(node)
+	player.add_to_group(&"player")
+	robber_attacker.add_to_group(&"robber")
+	RunState.record_down(civilian_by_player, GameTypesScript.Faction.CIVILIAN,
+		false, player)
+	RunState.record_down(civilian_by_robber, GameTypesScript.Faction.CIVILIAN,
+		true, robber_attacker)
+	RunState.record_down(robber_by_player, GameTypesScript.Faction.ROBBER,
+		true, player)
+	RunState.record_down(robber_by_robber, GameTypesScript.Faction.ROBBER,
+		false, robber_attacker)
+	print(("[attacker counts] civilian down=%d/player=%d killed=%d/player=%d " +
+		"robber down=%d/player=%d killed=%d/player=%d") %
+		[RunState.civilians_downed, RunState.civilians_downed_by_player,
+		RunState.civilians_killed, RunState.civilians_killed_by_player,
+		RunState.robbers_downed, RunState.robbers_downed_by_player,
+		RunState.robbers_killed, RunState.robbers_killed_by_player])
+	_assert("record_down: player グループの加害者だけ客の *_by_player に数える",
+		RunState.civilians_downed == 2 and RunState.civilians_downed_by_player == 1
+		and RunState.civilians_killed == 1 and RunState.civilians_killed_by_player == 0
+		and RunState.downed[0].attacker == player
+		and RunState.downed[1].attacker == robber_attacker)
+	_assert("record_down: player グループの加害者だけ犯人の *_by_player に数える",
+		RunState.robbers_downed == 2 and RunState.robbers_downed_by_player == 1
+		and RunState.robbers_killed == 1 and RunState.robbers_killed_by_player == 1
+		and RunState.downed[2].attacker == player
+		and RunState.downed[3].attacker == robber_attacker)
+	for node: Node3D in [player, robber_attacker, civilian_by_player,
+			civilian_by_robber, robber_by_player, robber_by_robber]:
+		node.queue_free()
+
 func _test_mark_down_lethal() -> void:
 	RunState.reset()
 	var robber := Node3D.new()
 	var civilian := Node3D.new()
+	var player := Node3D.new()
+	var robber_attacker := Node3D.new()
 	add_child(robber)
 	add_child(civilian)
-	RunState.record_down(robber, GameTypesScript.Faction.ROBBER, false)
-	RunState.record_down(civilian, GameTypesScript.Faction.CIVILIAN, false)
+	add_child(player)
+	add_child(robber_attacker)
+	player.add_to_group(&"player")
+	robber_attacker.add_to_group(&"robber")
+	RunState.record_down(robber, GameTypesScript.Faction.ROBBER, false, robber_attacker)
+	RunState.record_down(civilian, GameTypesScript.Faction.CIVILIAN, false, player)
 	var bodies_recorded: bool = RunState.downed[0].body == robber \
 		and RunState.downed[1].body == civilian
-	RunState.mark_down_lethal(robber)
-	RunState.mark_down_lethal(robber)
-	RunState.mark_down_lethal(civilian)
-	RunState.mark_down_lethal(civilian)
-	print("[mark lethal] records=%d robber_killed=%d civilian_killed=%d" %
-		[RunState.downed.size(), RunState.robbers_killed, RunState.civilians_killed])
+	RunState.mark_down_lethal(robber, player)
+	RunState.mark_down_lethal(robber, player)
+	RunState.mark_down_lethal(civilian, robber_attacker)
+	RunState.mark_down_lethal(civilian, robber_attacker)
+	print(("[mark lethal] records=%d robber_killed=%d/player=%d " +
+		"civilian_killed=%d/player=%d") %
+		[RunState.downed.size(), RunState.robbers_killed,
+		RunState.robbers_killed_by_player, RunState.civilians_killed,
+		RunState.civilians_killed_by_player])
 	_assert("DownedRecord.body を保持し、後から陣営別に致死更新できる",
 		bodies_recorded and RunState.downed[0].lethal and RunState.downed[1].lethal
 		and RunState.robbers_killed == 1 and RunState.civilians_killed == 1)
+	_assert("mark_down_lethal は加害者を更新し player グループだけ集計する",
+		RunState.downed[0].attacker == player
+		and RunState.downed[1].attacker == robber_attacker
+		and RunState.robbers_killed_by_player == 1
+		and RunState.civilians_killed_by_player == 0)
 	_assert("mark_down_lethal は同じ本体を二重集計しない",
 		RunState.robbers_killed == 1 and RunState.civilians_killed == 1)
 	robber.queue_free()
 	civilian.queue_free()
+	player.queue_free()
+	robber_attacker.queue_free()
 
 
 func _test_health_finish_reset() -> void:
 	var health := Health.new()
 	add_child(health)
 	var finished_count: Array[int] = [0]
-	health.finished.connect(func() -> void: finished_count[0] += 1)
+	health.finished.connect(func(_attacker: Node3D) -> void: finished_count[0] += 1)
 	health.take_finish_hit()
 	health.take_hit(health.max_hp)
 	health.take_finish_hit()
@@ -206,18 +264,26 @@ func _test_reset() -> void:
 	RunState.civilians_total = 9
 	RunState.civilians_downed = 9
 	RunState.civilians_killed = 9
+	RunState.civilians_downed_by_player = 9
+	RunState.civilians_killed_by_player = 9
 	RunState.robbers_total = 9
+	RunState.robbers_downed_by_player = 9
 	RunState.robbers_killed = 9
+	RunState.robbers_killed_by_player = 9
 	RunState.player_fired_gun = true
 	RunState.elapsed = 123.0
 	RunState.reset()
 	var ok: bool = RunState.civilians_total == 0 \
 		and RunState.civilians_downed == 0 \
 		and RunState.civilians_killed == 0 \
+		and RunState.civilians_downed_by_player == 0 \
+		and RunState.civilians_killed_by_player == 0 \
 		and RunState.civilians_rescued == 0 \
 		and RunState.robbers_total == 0 \
 		and RunState.robbers_downed == 0 \
 		and RunState.robbers_killed == 0 \
+		and RunState.robbers_downed_by_player == 0 \
+		and RunState.robbers_killed_by_player == 0 \
 		and RunState.player_fired_gun == false \
 		and is_equal_approx(RunState.elapsed, 0.0) \
 		and RunState.downed.is_empty()

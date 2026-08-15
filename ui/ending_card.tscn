@@ -36,7 +36,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="Content" type="VBoxContainer" parent="Screen/Center"]
-custom_minimum_size = Vector2(560, 0)
+custom_minimum_size = Vector2(900, 0)
 layout_mode = 2
 theme_override_constants/separation = 28
 
@@ -51,5 +51,5 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.94, 0.94, 0.97, 1)
 theme_override_font_sizes/font_size = 24
-text = "犯人ダウン数: 0\n犯人死亡数: 0\n客ダウン数: 0\n客死亡数: 0\n経過時間: 0.0 秒\n\nEnter でやり直し"
+text = "犯人: 無力化 0（うち死亡 0 / 自分による無力化 0 / 自分による死亡 0）\n客: 無力化 0（うち死亡 0 / 自分による無力化 0 / 自分による死亡 0）\n経過時間: 0.0 秒\n\nEnter でやり直し"
 horizontal_alignment = 1

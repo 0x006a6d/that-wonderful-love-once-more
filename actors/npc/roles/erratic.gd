@@ -6,7 +6,7 @@ class_name Erratic
 
 @export_group("Civilian Shooting")
 ## 生存していて射線が通る最寄りの客を狙い始める間隔（秒）。
-@export var shoot_civilian_interval: float = 8.0
+@export var shoot_civilian_interval: float = 15.0
 ## 客を狙ってから発砲するまでの予備動作（秒）。
 @export var shoot_telegraph_duration: float = 0.6
 ## 客本体の原点から狙う高さ（m）。伏せ姿の Hurtbox 中心に合わせる。

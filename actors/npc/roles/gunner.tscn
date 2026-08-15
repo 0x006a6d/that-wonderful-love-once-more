@@ -19,3 +19,4 @@ script = ExtResource("3_gun")
 damage = 20.0
 lethal = true
 ignore_stagger_threshold = false
+ignore_groups = Array[StringName]([&"robber"])

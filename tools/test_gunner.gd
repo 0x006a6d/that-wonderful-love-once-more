@@ -3,6 +3,7 @@ extends "res://tools/gunner_test_harness.gd"
 ## 銃持ちの COVER 選定・移動・射撃を検証するヘッドレスシーン。
 
 const CIVILIAN_SCENE: PackedScene = preload("res://actors/npc/civilian.tscn")
+const ROBBER_SCENE: PackedScene = preload("res://actors/npc/robber.tscn")
 const PLAYER_POSITION: Vector3 = Vector3(0.0, 0.0, -8.0)
 const ALT_PLAYER_POSITION: Vector3 = Vector3(6.0, 0.0, -8.0)
 const CLEAR_NEAR: Vector3 = Vector3(-2.0, 0.0, 0.0)
@@ -25,6 +26,7 @@ func _run() -> void:
 	await _test_cover_selection()
 	await _test_blocked_only_fallback()
 	await _test_shooting_and_damage()
+	await _test_robber_does_not_block_shot()
 	await _test_reevaluation()
 	await _test_melee_stops_shooting()
 	await _test_prologue_and_downed()
@@ -122,6 +124,35 @@ func _test_shooting_and_damage() -> void:
 		and health.current_hp() < health.max_hp)
 	_assert("11. damage=20 の一発ではプレイヤーはダウンしない",
 		is_equal_approx(hp_after_one, 80.0) and not health.is_downed())
+
+
+func _test_robber_does_not_block_shot() -> void:
+	await _new_world(GameTypes.Act.INFILTRATION)
+	var player := _spawn_player(PLAYER_POSITION)
+	var gunner := _spawn_gunner(Vector3.ZERO)
+	gunner.set_physics_process(false)
+	var ally := ROBBER_SCENE.instantiate() as Robber
+	ally.position = Vector3(0.0, 0.0, -4.0)
+	_actors.add_child(ally)
+	ally.set_physics_process(false)
+	for _frame: int in range(6):
+		await get_tree().physics_frame
+	var gun := gunner.get_node("MuzzlePoint/HitscanGun") as HitscanGun
+	var ally_health := ally.get_node("Health") as Health
+	var player_health := player.get_node("Health") as Health
+	var aim := player.global_position + Vector3.UP * gunner.player_aim_height
+	var clear_through_ally := gun.has_clear_shot(player, aim)
+	var hit_body := gun.fire_at(aim)
+	await get_tree().physics_frame
+	print(("[ally transparency] clear=%s hit=%s ally HP=%.1f player HP=%.1f " +
+		"ignore=%s") % [str(clear_through_ally), str(hit_body),
+		ally_health.current_hp(), player_health.current_hp(), str(gun.ignore_groups)])
+	_assert("6a. プレイヤーとの直線上にいる仲間の犯人は銃撃で HP が減らない",
+		is_equal_approx(ally_health.current_hp(), ally_health.max_hp)
+		and gun.ignore_groups.has(&"robber"))
+	_assert("6b. 仲間越しでも射線ありと判定し、背後のプレイヤーへ命中する",
+		clear_through_ally and hit_body == player
+		and is_equal_approx(player_health.current_hp(), 80.0))
 
 
 func _test_reevaluation() -> void:

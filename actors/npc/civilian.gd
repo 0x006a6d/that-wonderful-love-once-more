@@ -87,6 +87,8 @@ var _flee_mode: bool = false
 var _return_state: int = CivilianState.IDLE
 ## プレイヤー側から通知された、意図して近接対象にしている間だけ true。
 var _melee_targetable: bool = false
+## Hurtbox から通知された、最後に自分へ攻撃を成立させた本体。
+var _last_attacker: Node3D = null
 
 
 func _ready() -> void:
@@ -310,8 +312,13 @@ func _on_staggered() -> void:
 func _on_downed(lethal: bool) -> void:
 	if _sm == null or _sm.current() == CivilianState.DOWNED:
 		return
-	RunState.record_down(self, GameTypes.Faction.CIVILIAN, lethal)
+	RunState.record_down(self, GameTypes.Faction.CIVILIAN, lethal, _last_attacker)
 	_sm.transition_to(CivilianState.DOWNED)
+
+
+## Hurtbox から具体的な攻撃種別に依存せず、最後の加害者を受け取る。
+func record_attacker(attacker: Node3D) -> void:
+	_last_attacker = attacker
 
 
 func _on_civilian_downed(total: int) -> void:

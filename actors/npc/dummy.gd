@@ -27,6 +27,7 @@ var _base_albedo: Color = Color(1, 1, 1, 1)
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_timer: float = 0.0
 var _downed: bool = false
+var _last_attacker: Node3D = null
 
 
 func _ready() -> void:
@@ -92,8 +93,12 @@ func _on_downed(lethal: bool) -> void:
 		return
 	_downed = true
 	# 犯人としてダウンを記録する（ダミーは robber 陣営扱い）。
-	RunState.record_down(self, GameTypes.Faction.ROBBER, lethal)
+	RunState.record_down(self, GameTypes.Faction.ROBBER, lethal, _last_attacker)
 	# その場に倒れる（回転で簡易表現）。前方 X 軸まわりに倒す。
 	var tw := create_tween()
 	tw.tween_property(self, "rotation:x", deg_to_rad(fall_angle_deg), fall_duration) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+
+func record_attacker(attacker: Node3D) -> void:
+	_last_attacker = attacker

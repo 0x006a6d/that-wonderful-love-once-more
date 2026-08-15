@@ -49,7 +49,7 @@ shape = SubResource("Capsule_hurt")
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("2_health")
-stagger_threshold = 3
+stagger_threshold = 2
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 path_desired_distance = 0.6

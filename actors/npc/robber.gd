@@ -123,6 +123,8 @@ var _engaged_notified: bool = false
 
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_timer: float = 0.0
+## Hurtbox から通知された、最後に自分へ攻撃を成立させた本体。
+var _last_attacker: Node3D = null
 
 
 func _ready() -> void:
@@ -393,7 +395,7 @@ func _on_staggered() -> void:
 func _on_downed(lethal: bool) -> void:
 	if _sm == null or _sm.current() == State.DOWNED:
 		return
-	RunState.record_down(self, GameTypes.Faction.ROBBER, lethal)
+	RunState.record_down(self, GameTypes.Faction.ROBBER, lethal, _last_attacker)
 	# 犯人が1体ダウンしても幕は進む（technical-spec §5）。
 	if not _engaged_notified:
 		_engaged_notified = true
@@ -405,8 +407,9 @@ func _on_downed(lethal: bool) -> void:
 	_sm.transition_to(State.DOWNED)
 
 
-func _on_finished() -> void:
-	RunState.mark_down_lethal(self)
+func _on_finished(attacker: Node3D) -> void:
+	_last_attacker = attacker
+	RunState.mark_down_lethal(self, _last_attacker)
 
 
 # --- Hurtbox からの呼び出し -------------------------------------------------
@@ -414,6 +417,11 @@ func _on_finished() -> void:
 ## LockOnDetector が役割型へ依存せず、追い打ち可能な対象か問い合わせるAPI。
 func can_receive_finish_hit() -> bool:
 	return _health != null and _health.is_downed()
+
+
+## Hurtbox から具体的な攻撃種別に依存せず、最後の加害者を受け取る。
+func record_attacker(attacker: Node3D) -> void:
+	_last_attacker = attacker
 
 ## direction は攻撃者→自分の水平方向。
 func receive_knockback(direction: Vector3, strength: float) -> void:

@@ -34,15 +34,18 @@ func owner_body() -> Node3D:
 
 ## Hitbox から呼ばれる。payload を本体の Health / ノックバックへ伝える。
 func receive_hit(hitbox: Hitbox) -> void:
+	var attacker := hitbox.source_body()
 	if _health != null and _health.is_downed():
 		# 追い打ちはロックオン対象本人を exempt_body に指定した攻撃だけ通す。
 		# 通常ダメージとノックバックは与えず、残りコンボや範囲攻撃では成立しない。
 		if _owner_body != null and hitbox.exempt_body == _owner_body:
+			_notify_attacker(attacker)
 			if _owner_body.has_method("flash_hit"):
 				_owner_body.call("flash_hit")
-			_health.take_finish_hit()
+			_health.take_finish_hit(attacker)
 		return
-	var dir := _knockback_direction(hitbox.source_body())
+	_notify_attacker(attacker)
+	var dir := _knockback_direction(attacker)
 	if _owner_body != null and _owner_body.has_method("receive_knockback"):
 		_owner_body.call("receive_knockback", dir, hitbox.knockback)
 	if _owner_body != null and _owner_body.has_method("flash_hit"):
@@ -59,6 +62,7 @@ func receive_hit(hitbox: Hitbox) -> void:
 ## 客へ届く必要があるため、狙った射線の最初の Hurtbox にそのまま通す。
 func receive_shot(shooter: Node3D, damage: float, lethal: bool,
 		ignore_stagger_threshold: bool) -> void:
+	_notify_attacker(shooter)
 	var dir := _knockback_direction(shooter)
 	if _owner_body != null and _owner_body.has_method("receive_knockback"):
 		_owner_body.call("receive_knockback", dir, 0.0)
@@ -66,6 +70,12 @@ func receive_shot(shooter: Node3D, damage: float, lethal: bool,
 		_owner_body.call("flash_hit")
 	if _health != null:
 		_health.take_hit(damage, lethal, ignore_stagger_threshold)
+
+
+## 本体だけが最後の加害者を保持する。Hurtbox は具体的な役割型へ依存しない。
+func _notify_attacker(attacker: Node3D) -> void:
+	if _owner_body != null and _owner_body.has_method("record_attacker"):
+		_owner_body.call("record_attacker", attacker)
 
 
 ## 攻撃者から被弾側への水平方向（ノックバックの向き）。
