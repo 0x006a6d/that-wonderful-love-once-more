@@ -5,6 +5,7 @@ extends Node
 
 ## ダウンした相手の記録。エンディング時の死体配置（aftermath）に使う。
 class DownedRecord:
+	var body: Node3D = null
 	var faction: int = GameTypes.Faction.CIVILIAN
 	var position: Vector3 = Vector3.ZERO
 	var basis: Basis = Basis.IDENTITY
@@ -28,6 +29,7 @@ var downed: Array[DownedRecord] = []
 
 func record_down(body: Node3D, faction: int, lethal: bool) -> void:
 	var r := DownedRecord.new()
+	r.body = body
 	r.faction = faction
 	r.position = body.global_position
 	r.basis = body.global_transform.basis
@@ -45,6 +47,24 @@ func record_down(body: Node3D, faction: int, lethal: bool) -> void:
 			robbers_downed += 1
 			if lethal:
 				robbers_killed += 1
+
+
+## 既に記録済みのダウンを、後から致死として更新する。
+## 進行判断は持たず、同じ本体の集計を二重に増やさない。
+func mark_down_lethal(body: Node3D) -> void:
+	for r: DownedRecord in downed:
+		if r.body != body:
+			continue
+		if r.lethal:
+			return
+		r.lethal = true
+		match r.faction:
+			GameTypes.Faction.CIVILIAN:
+				civilians_killed += 1
+				deviation_changed.emit(deviation_level())
+			GameTypes.Faction.ROBBER:
+				robbers_killed += 1
+		return
 
 
 ## 0 = 正常, 1 = 警戒, 2 = 敵性。警察AIとHUD配色の両方がこれを参照する。

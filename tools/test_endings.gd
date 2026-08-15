@@ -28,9 +28,9 @@ func _run() -> void:
 	_original_breach_delay = GameDirector.breach_delay
 
 	await _test_act_flow_elapsed_and_ideal()
-	await _test_ending_case(GameTypes.Ending.NORMAL, "通常", 0, false, true)
-	await _test_ending_case(GameTypes.Ending.DRIFT, "逸脱", 3, false, false)
-	await _test_ending_case(GameTypes.Ending.FAILURE, "失敗", 1, true, false, true)
+	await _test_normal_finish_case()
+	await _test_ending_case(GameTypes.Ending.DRIFT, "逸脱", 3, false)
+	await _test_ending_case(GameTypes.Ending.FAILURE, "失敗", 1, true, true)
 
 	GameDirector.enable_breach = _original_breach_enabled
 	GameDirector.breach_delay = _original_breach_delay
@@ -64,7 +64,7 @@ func _test_act_flow_elapsed_and_ideal() -> void:
 	_assert("犯人3体のダウンで ENGAGEMENT から EPILOGUE へ進む",
 		RunState.robbers_total == 3 and RunState.robbers_downed == 3
 		and GameDirector.current_act == GameTypes.Act.EPILOGUE)
-	_assert("客無傷・犯人全員非致死なら Ending.IDEAL",
+	_assert("客無傷・犯人を倒しただけなら robbers_killed=0 で Ending.IDEAL",
 		RunState.resolve_ending() == GameTypes.Ending.IDEAL
 		and RunState.civilians_downed == 0 and RunState.robbers_killed == 0)
 	_assert("EPILOGUE でエンディング表示が出て分岐名が一致する",
@@ -81,8 +81,30 @@ func _test_act_flow_elapsed_and_ideal() -> void:
 	await _free_lobby(lobby)
 
 
+func _test_normal_finish_case() -> void:
+	await _reset_without_lobby()
+	var lobby := await _spawn_lobby()
+	if lobby == null:
+		_assert("通常 ケースで bank_lobby.tscn を読み込める", false)
+		return
+	var robber := lobby.get_node_or_null(^"RobberLeader") as Robber
+	var player := lobby.get_node_or_null(^"Player") as Node3D
+	var finish_path_ok := await _finish_robber_with_player(player, robber)
+	_down_all_robbers(lobby, false)
+
+	var card := lobby.get_node_or_null(^"EndingCard") as EndingCard
+	var clean_conditions: bool = RunState.civilians_downed == 0 \
+		and RunState.robbers_killed == 1
+	_assert("通常: 実際の再ロック＋2回の追い打ち経路で判定へ到達する",
+		finish_path_ok and GameDirector.current_act == GameTypes.Act.EPILOGUE
+		and RunState.resolve_ending() == GameTypes.Ending.NORMAL and clean_conditions)
+	_assert("通常: 表示名が判定結果と一致する",
+		card != null and card.is_displayed() and card.displayed_title() == "通常")
+	await _free_lobby(lobby)
+
+
 func _test_ending_case(expected: int, expected_title: String,
-		civilian_down_count: int, civilian_lethal: bool, robber_lethal: bool,
+		civilian_down_count: int, civilian_lethal: bool,
 		test_restart: bool = false) -> void:
 	await _reset_without_lobby()
 	var lobby := await _spawn_lobby()
@@ -94,14 +116,11 @@ func _test_ending_case(expected: int, expected_title: String,
 		var civilian := lobby.get_node_or_null(
 			NodePath("Civilian%d" % (index + 1))) as Civilian
 		_down_civilian(civilian, civilian_lethal and index == 0)
-	_down_all_robbers(lobby, robber_lethal)
+	_down_all_robbers(lobby, false)
 
 	var card := lobby.get_node_or_null(^"EndingCard") as EndingCard
 	var clean_conditions := false
 	match expected:
-		GameTypes.Ending.NORMAL:
-			clean_conditions = RunState.civilians_downed == 0 \
-				and RunState.robbers_killed == 1
 		GameTypes.Ending.DRIFT:
 			clean_conditions = RunState.civilians_downed == 3 \
 				and RunState.civilians_killed == 0 and RunState.robbers_killed == 0
@@ -125,6 +144,50 @@ func _test_ending_case(expected: int, expected_title: String,
 	await _free_lobby(lobby)
 
 
+## ロビー内の実 Player → LockOn → Hitbox → Hurtbox → Health.finished 経路で
+## 非致死ダウン済みの犯人を追い打ちし、RunState の記録を後から更新する。
+func _finish_robber_with_player(player: Node3D, robber: Robber) -> bool:
+	if player == null or robber == null:
+		return false
+	var health := robber.get_node_or_null(robber.health_path) as Health
+	var hurtbox := robber.get_node_or_null(robber.hurtbox_path) as Hurtbox
+	var detector := player.get_node_or_null(^"LockOnDetector") as LockOn
+	var hitbox := player.get_node_or_null(^"Model/MeleeHitbox") as Hitbox
+	var model := player.get_node_or_null(^"Model") as Node3D
+	if health == null or hurtbox == null or detector == null or hitbox == null or model == null:
+		return false
+
+	# AIの物理更新だけ止め、ロックオン検出に必要な PhysicsBody は有効へ戻す。
+	robber.process_mode = Node.PROCESS_MODE_INHERIT
+	robber.set_physics_process(false)
+	robber.fall_duration = 0.0
+	# x=0,z=4 の柱をカメラレイが横切らない、ロビー中央の開けた位置を使う。
+	robber.global_position = Vector3(2.0, 0.05, 0.0)
+	player.global_position = Vector3(2.0, 0.05, 1.0)
+	model.rotation.y = PI
+	health.take_hit(health.max_hp)
+	for _frame: int in range(WAIT_FRAMES):
+		await get_tree().physics_frame
+	var camera := player.get_node_or_null(^"SpringArm3D/Camera3D") as Camera3D
+	var distance := player.global_position.distance_to(robber.global_position)
+	var overlapping: Array[Node3D] = detector.get_overlapping_bodies()
+	var occluded: bool = bool(detector.call("_is_occluded", robber))
+	print("[normal finish acquire] distance=%.3f range=%.3f overlapping=%d contains=%s downed=%s finishable=%s occluded=%s camera=%s" %
+		[distance, detector.finish_lock_range, overlapping.size(), str(overlapping.has(robber)),
+		str(health.is_downed()), str(robber.can_receive_finish_hit()), str(occluded),
+		str(camera.global_position if camera != null else Vector3.ZERO)])
+	detector.call("_acquire_best_target")
+	var acquired: bool = detector.current_target() == robber and hitbox.exempt_body == robber
+	var killed_before: int = RunState.robbers_killed
+	for _hit: int in range(health.finish_hits):
+		hitbox.configure(1.0, 0.0, false)
+		hitbox.call("_try_hit", hurtbox)
+	var killed_after: int = RunState.robbers_killed
+	print("[normal finish path] acquired=%s finish_hits=%d killed=%d -> %d" %
+		[str(acquired), health.finish_hits, killed_before, killed_after])
+	return acquired and health.finish_hits == 2 and killed_before == 0 and killed_after == 1
+
+
 func _spawn_lobby() -> Node3D:
 	var lobby := LOBBY_SCENE.instantiate() as Node3D
 	if lobby == null:
@@ -137,7 +200,8 @@ func _spawn_lobby() -> Node3D:
 			actor.process_mode = Node.PROCESS_MODE_DISABLED
 	var player := lobby.get_node_or_null(^"Player")
 	if player != null:
-		player.process_mode = Node.PROCESS_MODE_DISABLED
+		# 移動だけ止め、LockOnDetector と Hitbox の実経路は動かして通常分岐を検証する。
+		player.set_physics_process(false)
 	for _frame: int in range(WAIT_FRAMES):
 		await get_tree().process_frame
 	return lobby

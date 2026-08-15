@@ -1,7 +1,8 @@
 extends Area3D
 class_name LockOn
 
-## 犯人・客から、カメラ前方に最も近い生存対象を選ぶロックオン検出器。
+## 犯人・客の生存対象と、至近距離の追い打ち可能対象から、カメラ前方に
+## 最も近い相手を選ぶロックオン検出器。
 ## カメラと所有者は player.gd から注入し、親階層への直接参照を持たない。
 
 const WORLD_MASK: int = 1 << 0
@@ -10,6 +11,8 @@ const CIVILIAN_MASK: int = 1 << 3
 
 ## ロックオン候補を検出する距離（m）。
 @export var lock_on_range: float = 12.0
+## ダウン済みの追い打ち可能対象を候補に含める距離（m）。
+@export var finish_lock_range: float = 2.0
 ## カメラ前方から候補までに許容する最大角度（度）。
 @export var lock_on_fov_deg: float = 100.0
 ## 対象の角度・遮蔽判定で狙う、本体原点からの高さ（m）。
@@ -23,6 +26,8 @@ const CIVILIAN_MASK: int = 1 << 3
 ## 8/24 の HUD ロックオンマーカー実装で置き換える暫定 3D 表示。
 @export var show_placeholder_marker: bool = true
 @export var marker_color: Color = Color(1.0, 0.78, 0.16, 1.0)
+## 追い打ち可能対象を明示する暫定マーカー色。
+@export var marker_finish_color: Color = Color(0.92, 0.20, 0.18, 1.0)
 ## 暫定マーカー球の半径（m）。
 @export var marker_size: float = 0.12
 ## 対象本体の原点からマーカーまでの高さ（m）。
@@ -38,6 +43,7 @@ var _target: Node3D = null
 var _target_health: Health = null
 var _occluded_time: float = 0.0
 var _marker: MeshInstance3D = null
+var _marker_material: StandardMaterial3D = null
 
 
 func _ready() -> void:
@@ -105,7 +111,16 @@ func _acquire_best_target() -> void:
 	var best_distance: float = INF
 	for body: Node3D in get_overlapping_bodies():
 		var health := _find_health(body)
-		if health == null or health.is_downed():
+		if health == null:
+			continue
+		var distance := _candidate_origin().distance_to(body.global_position)
+		if health.is_downed():
+			# 陣営や具体型を参照せず、対象自身の公開問い合わせで追い打ち可否を決める。
+			if distance > finish_lock_range or not body.has_method("can_receive_finish_hit"):
+				continue
+			if not bool(body.call("can_receive_finish_hit")):
+				continue
+		elif distance > lock_on_range:
 			continue
 		var to_target := _aim_position(body) - _camera.global_position
 		if to_target.is_zero_approx():
@@ -114,9 +129,6 @@ func _acquire_best_target() -> void:
 		if rad_to_deg(angle) > lock_on_fov_deg:
 			continue
 		if _is_occluded(body):
-			continue
-		var distance := _candidate_origin().distance_to(body.global_position)
-		if distance > lock_on_range:
 			continue
 		if angle < best_angle or (is_equal_approx(angle, best_angle) and distance < best_distance):
 			best = body
@@ -215,10 +227,10 @@ func _create_placeholder_marker() -> void:
 	sphere.radius = marker_size
 	sphere.height = marker_size * 2.0
 	_marker.mesh = sphere
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = marker_color
-	_marker.material_override = material
+	_marker_material = StandardMaterial3D.new()
+	_marker_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_marker_material.albedo_color = marker_color
+	_marker.material_override = _marker_material
 	_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_marker)
 	_marker.top_level = true
@@ -232,4 +244,7 @@ func _update_marker() -> void:
 		and is_instance_valid(_target) and _target.is_inside_tree())
 	_marker.visible = can_show
 	if can_show:
+		if _marker_material != null:
+			var finish_target: bool = _target_health != null and _target_health.is_downed()
+			_marker_material.albedo_color = marker_finish_color if finish_target else marker_color
 		_marker.global_position = _target.global_position + Vector3.UP * marker_height

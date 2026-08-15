@@ -17,14 +17,20 @@ class_name Health
 @export var max_hp: float = 100.0
 ## ダウンに要する最低被弾回数。客は 3（誤爆防止）、犯人・ダミーは 1。
 @export var stagger_threshold: int = 1
+## ダウン後に追い打ち成立とする命中回数。
+@export var finish_hits: int = 2
 ## よろけ（ダウンには至らない被弾）が発生した。
 signal staggered()
 ## ダウンした。lethal=true なら致死（攻撃側の Hitbox.lethal から渡される）。
 signal downed(lethal: bool)
+## ダウン後の追い打ちが規定回数に達した。
+signal finished()
 
 var _hp: float = 0.0
 var _stagger_count: int = 0
 var _is_downed: bool = false
+var _finish_hit_count: int = 0
+var _finished_emitted: bool = false
 
 
 func _ready() -> void:
@@ -50,6 +56,17 @@ func take_hit(damage: float, lethal: bool = false,
 		staggered.emit()
 
 
+## ダウン後の追い打ちを1回受ける。通常被弾とは独立させ、規定回数に
+## 達した瞬間だけ finished を通知する。
+func take_finish_hit() -> void:
+	if not _is_downed or _finished_emitted:
+		return
+	_finish_hit_count += 1
+	if _finish_hit_count >= finish_hits:
+		_finished_emitted = true
+		finished.emit()
+
+
 func current_hp() -> float:
 	return _hp
 
@@ -58,8 +75,10 @@ func is_downed() -> bool:
 	return _is_downed
 
 
-## HP・よろけ回数を初期状態へ戻す。
+## HP・よろけ回数・追い打ち状態を初期状態へ戻す。
 func revive() -> void:
 	_hp = max_hp
 	_stagger_count = 0
 	_is_downed = false
+	_finish_hit_count = 0
+	_finished_emitted = false

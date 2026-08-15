@@ -148,6 +148,7 @@ func _ready() -> void:
 	if _health != null:
 		_health.staggered.connect(_on_staggered)
 		_health.downed.connect(_on_downed)
+		_health.finished.connect(_on_finished)
 
 	if _sm == null:
 		push_warning("robber: StateMachine が無い")
@@ -358,14 +359,22 @@ func _physics_staggered(delta: float) -> void:
 func _enter_downed() -> void:
 	_close_hitbox()
 	_stop_horizontal_immediate()
-	# これ以上殴られない・押されない。
-	# ダウンは Hitbox → Hurtbox → Health の信号処理中に確定するため、Area3D の
-	# 監視フラグは即時に書き換えられない（"Function blocked during in/out signal"）。
-	# 物理ステップの終わりに反映させる。
+	# Hurtbox 自身が他の Area を監視する必要はないため monitoring は切る一方、
+	# プレイヤーの Hitbox 側から検出できるよう monitorable だけを残す。Health は
+	# ダウン中の通常 take_hit() を弾き、Hurtbox も再ロック済みの追い打ちだけを
+	# 振り分けるため、他人の通常攻撃がダメージへ戻ることはない。
+	# ダウンは物理信号中に確定するため、変更は物理ステップ末尾へ遅延する。
 	if _hurtbox != null:
+		# 本体の固定ダウン回転に巻き込まれて判定まで床下へ倒れると、立ったままの
+		# 近接 Hitbox が届かない。現在のワールド姿勢を保って本体から独立させ、
+		# 追い打ち用の検出体積だけは従来の高さに残す。
+		var hurtbox_transform: Transform3D = _hurtbox.global_transform
+		_hurtbox.top_level = true
+		_hurtbox.global_transform = hurtbox_transform
 		_hurtbox.set_deferred("monitoring", false)
-		_hurtbox.set_deferred("monitorable", false)
-	set_collision_layer_value(3, false)
+		_hurtbox.set_deferred("monitorable", true)
+	# robber レイヤーは LockOnDetector が倒れた本体を狙い直すために残す。
+	set_collision_layer_value(3, true)
 	# 固定ポーズで倒す（ラグドールはコンテスト版では扱わない）。
 	var tw := create_tween()
 	tw.tween_property(self, "rotation:x", deg_to_rad(fall_angle_deg), fall_duration) \
@@ -396,7 +405,15 @@ func _on_downed(lethal: bool) -> void:
 	_sm.transition_to(State.DOWNED)
 
 
+func _on_finished() -> void:
+	RunState.mark_down_lethal(self)
+
+
 # --- Hurtbox からの呼び出し -------------------------------------------------
+
+## LockOnDetector が役割型へ依存せず、追い打ち可能な対象か問い合わせるAPI。
+func can_receive_finish_hit() -> bool:
+	return _health != null and _health.is_downed()
 
 ## direction は攻撃者→自分の水平方向。
 func receive_knockback(direction: Vector3, strength: float) -> void:

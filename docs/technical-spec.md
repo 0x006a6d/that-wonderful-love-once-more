@@ -126,6 +126,7 @@ func _on_deviation_changed(level: float) -> void:
 extends Node
 
 class DownedRecord:
+	var body: Node3D
     var faction: int
     var position: Vector3
     var basis: Basis
@@ -149,6 +150,7 @@ var downed: Array[DownedRecord] = []
 
 func record_down(body: Node3D, faction: int, lethal: bool) -> void:
     var r := DownedRecord.new()
+	r.body = body
     r.faction = faction
     r.position = body.global_position
     r.basis = body.global_transform.basis
@@ -166,6 +168,22 @@ func record_down(body: Node3D, faction: int, lethal: bool) -> void:
             robbers_downed += 1
             if lethal:
                 robbers_killed += 1
+
+
+func mark_down_lethal(body: Node3D) -> void:
+    for r: DownedRecord in downed:
+        if r.body != body:
+            continue
+        if r.lethal:
+            return
+        r.lethal = true
+        match r.faction:
+            GameTypes.Faction.CIVILIAN:
+                civilians_killed += 1
+                deviation_changed.emit(deviation_level())
+            GameTypes.Faction.ROBBER:
+                robbers_killed += 1
+        return
 
 
 ## 0 = 正常, 1 = 警戒, 2 = 敵性。警察AIとHUD配色の両方がこれを参照する
@@ -207,6 +225,11 @@ func reset() -> void:
 `elapsed` は `GameDirector` が `INFILTRATION` 進入から `EPILOGUE` 進入まで
 （`INFILTRATION` / `ENGAGEMENT` / `BREACH` 中）加算する。進行を知らない
 `RunState` 自身には `_process()` を置かない。`reset()` で `robbers_total` と `elapsed` も0へ戻す。
+
+`DownedRecord.body` は、ダウン時の非致死記録を同じ本体への追い打ち成立後に更新するための
+参照である。`mark_down_lethal(body)` は該当記録の `lethal` を `true` にし、陣営別の
+死亡数を1回だけ増やす。既に致死の記録へ再度呼んでも二重集計しない。進行判断は引き続き
+犯人側に置き、`RunState` は記録更新だけを担う。
 
 ## 5. GameDirector（autoload）
 
@@ -347,6 +370,28 @@ func _disable_hitbox() -> void:
 
 銃の場合、ヒットスキャンの射線上に `Faction.CIVILIAN` がいるなら HUD のレティクル色を変更し、警告状態を明示する。
 
+### 6.4.1 ダウンした犯人への追い打ち（重要）
+
+格闘だけで犯人への「過剰な力」を明示する経路。客への誤爆対策と同じく、事故では成立しない
+3段階の関門を置く。
+
+1. ダウン中は `Health.take_hit()` が通常ダメージを従来どおり弾く
+2. 対象のダウンで既存ロックを自動解除し、倒れた犯人をもう一度ロックオンし直させる
+3. 再ロック中に `finish_hits`（既定2）回当てた時だけ `Health.finished` を送る
+
+`LockOnDetector.finish_lock_range` は既定 `2.0 m`。ダウン済み候補はこの範囲内かつ、対象が
+`can_receive_finish_hit()` を公開して `true` を返す場合だけ選べる。具体的な役割型や陣営は
+参照しない。暫定マーカーは追い打ち対象だけ `marker_finish_color` に変え、プレイヤーが
+意図している行為を明示する。
+
+`Hurtbox.receive_hit()` はダウン中、`Hitbox.exempt_body` が本体と一致する場合だけ
+`take_finish_hit()` へ振り分ける。追い打ちでは通常ダメージとノックバックを与えない。
+犯人は `Health.finished` を購読して `RunState.mark_down_lethal(self)` を呼ぶ。
+
+客の遺体は追い打ち対象外とする。ダウン時の Hurtbox を完全に切ったままにし、公開問い合わせも
+持たせない。客への「失敗」分岐に新たな事故経路を増やさないためである。追い打ち成立後も
+記録上 `robbers_killed` を更新するだけで、流血・損壊の描写は作らない。
+
 ### 6.5 プレイヤーの被弾（8/17）
 
 プレイヤーも `Health` + `Hurtbox` を持つ（NPCと同じスクリプトを共有する）。犯人の攻撃で HP が減り、ノックバックする。
@@ -366,17 +411,25 @@ func _disable_hitbox() -> void:
 ```gdscript
 @export var max_hp: float = 100.0
 @export var stagger_threshold: int = 1     # 客は 3
+@export var finish_hits: int = 2
 
 signal staggered()
 signal downed(lethal: bool)
+signal finished()
 
 func take_hit(damage: float, lethal: bool = false,
         ignore_stagger_threshold: bool = false) -> void
+func take_finish_hit() -> void
 ```
 
 致死判定は攻撃側が持ち、近接は `Hurtbox.receive_hit()` から `Health.take_hit(damage, lethal)`、銃撃は `Hurtbox.receive_shot()` から第3引数も含めて渡す。近接は `lethal = false`、銃撃は `lethal = true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
 
 `stagger_threshold` は `docs/game-design.md` §6.2 の「段階の設置」にあたり、広い近接判定の誤爆で客がダウンするのを防ぐ下限である。近接は既定の `ignore_stagger_threshold = false` のまま下限を適用する。狙って撃つ銃撃は `true` を渡し、HPが0なら被弾回数にかかわらずダウンさせる。既定値は `false` のため、既存の `take_hit()` 呼び出しの挙動は変わらない。
+
+`take_finish_hit()` はダウン済みの場合だけ内部カウンタを増やし、`finish_hits` 回目に
+`finished` を1回だけ送る。その後の呼び出しでは再送しない。`revive()` はHP・よろけ回数に
+加えて追い打ちカウンタと送信済み状態も初期化する。通常の `take_hit()` はダウン中の被弾を
+従来どおり弾く。
 
 ### 7.2 ステートマシン
 
@@ -491,7 +544,7 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 - **追跡**は `NavigationAgent3D`。ナビゲーションマップが未生成のときだけ直線移動にフォールバックする（ベイク前のステージでも動作確認できるようにするための保険）
 - 追跡速度（3.2 m/s）はプレイヤー（4.5 m/s）より遅い。逃げれば振り切れる
 - ALERT 到達時と自身のダウン時に `GameDirector.notify_robber_engaged()` を呼ぶ（§5 の INFILTRATION → ENGAGEMENT 条件）
-- ダウン時は `RunState.record_down()` を呼び、Hurtbox の監視を切って固定ポーズで倒れる。Area3D の監視フラグは信号処理中に書き換えられないため `set_deferred()` を使う
+- ダウン時は `RunState.record_down()` を呼び、固定ポーズで倒れる。Hurtbox は自身からの検出に不要な `monitoring` を切る一方、プレイヤーの Hitbox 側が追い打ちを検出できるよう `monitorable = true` だけを残す。本体のダウン回転で判定まで床へ倒れて近接が届かなくならないよう、Hurtbox の現在ワールド姿勢は `top_level` で保持する。通常ダメージは Health が弾き、再ロック済み攻撃だけを Hurtbox が追い打ちへ振り分けるため安全である。再ロック検出用の本体 robber レイヤーも残す。Area3D の監視フラグは信号処理中に書き換えられないため `set_deferred()` を使う
 
 #### リーダーの実装状況（8/18〜8/21）
 

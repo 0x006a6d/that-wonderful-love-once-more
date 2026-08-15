@@ -34,6 +34,14 @@ func owner_body() -> Node3D:
 
 ## Hitbox から呼ばれる。payload を本体の Health / ノックバックへ伝える。
 func receive_hit(hitbox: Hitbox) -> void:
+	if _health != null and _health.is_downed():
+		# 追い打ちはロックオン対象本人を exempt_body に指定した攻撃だけ通す。
+		# 通常ダメージとノックバックは与えず、残りコンボや範囲攻撃では成立しない。
+		if _owner_body != null and hitbox.exempt_body == _owner_body:
+			if _owner_body.has_method("flash_hit"):
+				_owner_body.call("flash_hit")
+			_health.take_finish_hit()
+		return
 	var dir := _knockback_direction(hitbox.source_body())
 	if _owner_body != null and _owner_body.has_method("receive_knockback"):
 		_owner_body.call("receive_knockback", dir, hitbox.knockback)

@@ -21,6 +21,8 @@ func _ready() -> void:
 	_test_ending_priority_failure_over_drift()
 	_test_deviation_level()
 	_test_police_threat_level()
+	_test_mark_down_lethal()
+	_test_health_finish_reset()
 	_test_reset()
 
 	print("=== 結果: PASS=%d FAIL=%d ===" % [_pass, _fail])
@@ -144,6 +146,58 @@ func _test_police_threat_level() -> void:
 	RunState.civilians_downed = 2
 	RunState.civilians_killed = 1
 	_assert("threat: killed=1 -> 2", RunState.police_threat_level() == 2)
+
+
+# --- ダウン後の致死更新 ---
+
+func _test_mark_down_lethal() -> void:
+	RunState.reset()
+	var robber := Node3D.new()
+	var civilian := Node3D.new()
+	add_child(robber)
+	add_child(civilian)
+	RunState.record_down(robber, GameTypesScript.Faction.ROBBER, false)
+	RunState.record_down(civilian, GameTypesScript.Faction.CIVILIAN, false)
+	var bodies_recorded: bool = RunState.downed[0].body == robber \
+		and RunState.downed[1].body == civilian
+	RunState.mark_down_lethal(robber)
+	RunState.mark_down_lethal(robber)
+	RunState.mark_down_lethal(civilian)
+	RunState.mark_down_lethal(civilian)
+	print("[mark lethal] records=%d robber_killed=%d civilian_killed=%d" %
+		[RunState.downed.size(), RunState.robbers_killed, RunState.civilians_killed])
+	_assert("DownedRecord.body を保持し、後から陣営別に致死更新できる",
+		bodies_recorded and RunState.downed[0].lethal and RunState.downed[1].lethal
+		and RunState.robbers_killed == 1 and RunState.civilians_killed == 1)
+	_assert("mark_down_lethal は同じ本体を二重集計しない",
+		RunState.robbers_killed == 1 and RunState.civilians_killed == 1)
+	robber.queue_free()
+	civilian.queue_free()
+
+
+func _test_health_finish_reset() -> void:
+	var health := Health.new()
+	add_child(health)
+	var finished_count: Array[int] = [0]
+	health.finished.connect(func() -> void: finished_count[0] += 1)
+	health.take_finish_hit()
+	health.take_hit(health.max_hp)
+	health.take_finish_hit()
+	var first_hit_kept: bool = finished_count[0] == 0
+	health.take_finish_hit()
+	health.take_finish_hit()
+	var once_only: bool = finished_count[0] == 1
+	health.revive()
+	health.take_hit(health.max_hp)
+	for _hit: int in range(health.finish_hits):
+		health.take_finish_hit()
+	print("[health finish] finish_hits=%d emitted=%d" %
+		[health.finish_hits, finished_count[0]])
+	_assert("Health.finished はダウン後の finish_hits 回目に1回だけ発火する",
+		health.finish_hits == 2 and first_hit_kept and once_only)
+	_assert("Health.revive は追い打ちカウンタと送信済み状態を戻す",
+		finished_count[0] == 2)
+	health.queue_free()
 
 
 # --- reset ---

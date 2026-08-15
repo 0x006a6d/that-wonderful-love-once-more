@@ -284,6 +284,8 @@ func _enter_downed() -> void:
 	_set_hurtbox_pose(prone_hurtbox_rotation_degrees, prone_hurtbox_height)
 	# ダウンは Hitbox → Hurtbox → Health の信号処理中に確定するため、
 	# Area3D の監視フラグは物理ステップの終わりに反映させる。
+	# 客の遺体を追い打ち可能にすると「失敗」への事故経路が増えるため、犯人と違い
+	# monitorable も切ったままにし、追い打ち対象にはしない。
 	if _hurtbox != null:
 		_hurtbox.set_deferred("monitoring", false)
 		_hurtbox.set_deferred("monitorable", false)
