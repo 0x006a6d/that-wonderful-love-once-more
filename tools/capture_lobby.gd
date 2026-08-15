@@ -66,11 +66,8 @@ func _ready() -> void:
 
 func _hide_runtime_characters(lobby: Node3D) -> void:
 	var player := lobby.get_node_or_null(^"Player") as Node3D
-	var robber := lobby.get_node_or_null(^"Robber1") as Node3D
 	if player != null:
 		player.visible = false
-	if robber != null:
-		robber.visible = false
 
 
 func _add_overlays(lobby: Node3D) -> void:

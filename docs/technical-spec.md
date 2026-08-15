@@ -542,7 +542,7 @@ NavigationAgent3D / ステートマシンを重複させない。共通の `Robb
 
 `levels/bank_lobby.tscn`。-Z が北、床上面が y=0。寸法の表記は X × Y × Z（m）。床・壁・柱・什器は `StaticBody3D` とし、layer=1 / mask=0、グループ `nav_source` に入れる。
 
-俯瞰図は `docs/img/bank_lobby_top.png`（北が上）。`tools/capture_lobby.tscn` をウィンドウありで実行すると再生成できる。マーカーは赤＝遮蔽点、黄＝巡回点、青＝プレイヤー、橙＝犯人、白＝客。レイアウトを変更したら撮り直して差し替える。
+俯瞰図は `docs/img/bank_lobby_top.png`（北が上）。`tools/capture_lobby.tscn` をウィンドウありで実行すると再生成できる。マーカーは赤＝遮蔽点、黄＝巡回点、青＝プレイヤー、橙＝犯人、白＝客。キャプチャでは Player だけを隠し、役割色の犯人3体と客6人は表示する。レイアウトを変更したら撮り直して差し替える。
 
 ![銀行ロビー俯瞰図](img/bank_lobby_top.png)
 
@@ -569,7 +569,7 @@ NavigationAgent3D / ステートマシンを重複させない。共通の `Robb
 |`Cover_TellerCounter_N3`|(4, 0.2, -7.15)|カウンター従業員側|
 |`Cover_Atm_E`|(-11.1, 0.2, 0)|ATM列の東側|
 
-巡回点は `Patrol_*`、配置予定地点は `<役割>Spawn<連番>` とする。
+巡回点は `Patrol_*`、初期配置地点は `<役割>Spawn<連番>` とする。
 
 |マーカー|座標 (x, y, z)|
 |---|---|
@@ -583,7 +583,23 @@ NavigationAgent3D / ステートマシンを重複させない。共通の `Robb
 |`CivilianSpawn3` / `CivilianSpawn4`|(-2, 0.2, 6) / (3, 0.2, 6)|
 |`CivilianSpawn5` / `CivilianSpawn6`|(8, 0.2, 7) / (10, 0.2, 2)|
 
-`Player` は `PlayerSpawn`、`Robber1` は `RobberSpawn1` と同じ座標に置く。`Robber1.patrol_points` には4個の `Patrol_*` を北西→北東→南東→南西の順で渡す。客と残り2体の犯人はこの段階ではインスタンス化しない。
+`Player` は従来どおり `PlayerSpawn` と同じ座標に置く。犯人3体と客6人の実体は次の対応で配置する。客は巡回しないため `patrol_points` は設定しない。
+
+|ノード名|シーン|スポーン地点|`patrol_points`|
+|---|---|---|---|
+|`RobberLeader`|`actors/npc/roles/leader.tscn`|`RobberSpawn1` (-8, 0.2, -4)|`Patrol_NorthWest` → `Patrol_SouthWest`|
+|`RobberGunner`|`actors/npc/roles/gunner.tscn`|`RobberSpawn3` (8, 0.2, -4)|`Patrol_NorthEast` → `Patrol_SouthEast`|
+|`RobberErratic`|`actors/npc/roles/erratic.tscn`|`RobberSpawn2` (0, 0.2, 1)|`Patrol_NorthEast` / `Patrol_SouthWest`（ランダム）|
+|`Civilian1`|`actors/npc/civilian.tscn`|`CivilianSpawn1` (-9, 0.2, 7)|—|
+|`Civilian2`|`actors/npc/civilian.tscn`|`CivilianSpawn2` (-5, 0.2, 7)|—|
+|`Civilian3`|`actors/npc/civilian.tscn`|`CivilianSpawn3` (-2, 0.2, 6)|—|
+|`Civilian4`|`actors/npc/civilian.tscn`|`CivilianSpawn4` (3, 0.2, 6)|—|
+|`Civilian5`|`actors/npc/civilian.tscn`|`CivilianSpawn5` (8, 0.2, 7)|—|
+|`Civilian6`|`actors/npc/civilian.tscn`|`CivilianSpawn6` (10, 0.2, 2)|—|
+
+配置意図は、リーダーを客の多い西側、銃持ちを柱などの遮蔽を使える東側、不安定型をロビー中央に置くこと。巡回経路も西側の縦経路、東側の縦経路、中央を横切る対角経路に分け、3体が同じ経路をなぞらないようにする。
+
+`levels/bank_lobby.gd` の `start_act` は既定値を `GameTypes.Act.INFILTRATION` とし、`_ready()` で `GameDirector.advance_to(start_act)` を呼ぶ。これは冒頭カットシーン未実装中だけの暫定処理で、カットシーン実装時は削除し、終了時の `GameDirector.notify_prologue_finished()` に置き換える。インスペクタで `start_act` を `PROLOGUE`（0）へ戻せば、客が伏せず犯人も撃たない状態で格闘だけの手応えを確認できる。
 
 ## 10. 警察（Police）
 

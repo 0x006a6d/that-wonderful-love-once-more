@@ -2,7 +2,10 @@
 
 [ext_resource type="Script" path="res://levels/bank_lobby.gd" id="1_lobby"]
 [ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]
-[ext_resource type="PackedScene" uid="uid://dkbj6jc7oqsmu" path="res://actors/npc/robber.tscn" id="3_robber"]
+[ext_resource type="PackedScene" path="res://actors/npc/roles/leader.tscn" id="3_leader"]
+[ext_resource type="PackedScene" path="res://actors/npc/roles/gunner.tscn" id="4_gunner"]
+[ext_resource type="PackedScene" path="res://actors/npc/roles/erratic.tscn" id="5_erratic"]
+[ext_resource type="PackedScene" path="res://actors/npc/civilian.tscn" id="6_civilian"]
 
 [sub_resource type="Environment" id="Env_lobby"]
 background_mode = 1
@@ -396,6 +399,32 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.2, 2)
 [node name="Player" parent="." instance=ExtResource("2_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 8)
 
-[node name="Robber1" parent="." instance=ExtResource("3_robber")]
+[node name="RobberLeader" parent="." instance=ExtResource("3_leader")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.2, -4)
-patrol_points = Array[NodePath]([NodePath("../Patrol_NorthWest"), NodePath("../Patrol_NorthEast"), NodePath("../Patrol_SouthEast"), NodePath("../Patrol_SouthWest")])
+patrol_points = Array[NodePath]([NodePath("../Patrol_NorthWest"), NodePath("../Patrol_SouthWest")])
+
+[node name="RobberGunner" parent="." instance=ExtResource("4_gunner")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, -4)
+patrol_points = Array[NodePath]([NodePath("../Patrol_NorthEast"), NodePath("../Patrol_SouthEast")])
+
+[node name="RobberErratic" parent="." instance=ExtResource("5_erratic")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 1)
+patrol_points = Array[NodePath]([NodePath("../Patrol_NorthEast"), NodePath("../Patrol_SouthWest")])
+
+[node name="Civilian1" parent="." instance=ExtResource("6_civilian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0.2, 7)
+
+[node name="Civilian2" parent="." instance=ExtResource("6_civilian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.2, 7)
+
+[node name="Civilian3" parent="." instance=ExtResource("6_civilian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.2, 6)
+
+[node name="Civilian4" parent="." instance=ExtResource("6_civilian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0.2, 6)
+
+[node name="Civilian5" parent="." instance=ExtResource("6_civilian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, 7)
+
+[node name="Civilian6" parent="." instance=ExtResource("6_civilian")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.2, 2)
