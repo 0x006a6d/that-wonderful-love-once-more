@@ -1,10 +1,11 @@
 extends Node
 
 ## プレイヤーのアニメーション制御。
-## locomotion(idle/walk/run ブレンド) と、入力列で分岐する近接コンボ木を駆動する。
+## locomotion(idle/walk/run ブレンド)、dance、入力列で分岐する近接コンボ木を駆動する。
 ##
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
 ## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
+## - dance: FBX から読むループクリップ。locomotion とだけ相互遷移する
 ## - melee_1..3: 生成済み .res（単発クリップ + Call Method Track 付き）
 ##
 ## 入力の流れ（1 押し 1 発）:
@@ -38,6 +39,13 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 ## 走行クリップ（Mixamo In Place）。
 @export_file("*.gltf", "*.fbx") var run_scene: String = "res://assets/motions/mixamo_run.fbx"
 @export var run_key: String = "mixamo_com"
+
+@export_group("Dance Clip")
+## 回復ダンス。locomotion と同様に FBX シーンとアニメーション名で読み込む。
+@export_file("*.gltf", "*.fbx") var dance_scene: String = "res://assets/motions/mixamo_dance_hiphop.fbx"
+@export var dance_key: String = "mixamo_com"
+## locomotion と dance 間のクロスフェード秒数。
+@export var dance_transition_xfade: float = 0.15
 
 @export_group("Locomotion Sync")
 ## locomotion ブレンドの基準速度（この速度で blend=1.0=走り）。
@@ -79,6 +87,8 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 
 signal combo_started()
 signal combo_finished()
+signal dance_started()
+signal dance_finished()
 
 var _anim_player: AnimationPlayer = null
 var _tree: AnimationTree = null
@@ -124,7 +134,7 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if _state_machine == null:
 		return
-	if _state == "locomotion":
+	if _state == "locomotion" or _state == "dance":
 		return
 	# クリップ終端の検出は再生位置で行う（自動遷移に任せず、入力列の分岐をコードで握る）。
 	var technique := ComboTree.technique_for(_combo_node)
@@ -235,6 +245,8 @@ func _accept_input(input_kind: StringName) -> void:
 	if _state == "locomotion":
 		_start_combo(ComboTree.root_for(input_kind))
 		return
+	if _state == "dance":
+		return
 	if _queue_closed:
 		return
 	# 抜け割合を過ぎた入力は、同じ物理フレームで終端処理より先に届いても予約しない。
@@ -275,7 +287,30 @@ func _projected_node() -> StringName:
 
 
 func is_attacking() -> bool:
-	return _state != "locomotion"
+	return _combo_node != &""
+
+
+## locomotion からだけダンスへ入る。攻撃中など他ステートからは遷移しない。
+func start_dance() -> bool:
+	if _state_machine == null or _state != "locomotion":
+		return false
+	_state = "dance"
+	_state_machine.travel("dance")
+	dance_started.emit()
+	return true
+
+
+## ダンス中だけ locomotion へ戻す。コンボの入力列には触れない。
+func stop_dance() -> void:
+	if _state_machine == null or _state != "dance":
+		return
+	_state = "locomotion"
+	_state_machine.travel("locomotion")
+	dance_finished.emit()
+
+
+func is_dancing() -> bool:
+	return _state == "dance"
 
 
 func _finish_combo() -> void:
@@ -313,6 +348,13 @@ func _build_library() -> bool:
 	else:
 		push_warning("player_melee: run (%s) load failed。idle で代用" % run_key)
 		lib.add_animation("jog", idle.duplicate(true) as Animation)
+
+	var dance := _extract(dance_scene, dance_key)
+	if dance == null:
+		push_warning("player_melee: dance (%s) load failed" % dance_key)
+		return false
+	dance.loop_mode = Animation.LOOP_LINEAR
+	lib.add_animation("dance", dance)
 
 	var m1 := load(MELEE_1_RES) as Animation
 	var m2 := load(MELEE_2_RES) as Animation
@@ -399,6 +441,8 @@ func _build_tree() -> void:
 	n_k2.animation = "player/kick_2"
 	var n_k3 := AnimationNodeAnimation.new()
 	n_k3.animation = "player/kick_3"
+	var n_dance := AnimationNodeAnimation.new()
+	n_dance.animation = "player/dance"
 
 	sm.add_node("locomotion", loco, Vector2(0, 0))
 	sm.add_node("melee_1", n_m1, Vector2(300, 0))
@@ -407,6 +451,7 @@ func _build_tree() -> void:
 	sm.add_node("kick_1", n_k1, Vector2(300, 150))
 	sm.add_node("kick_2", n_k2, Vector2(600, 150))
 	sm.add_node("kick_3", n_k3, Vector2(900, 150))
+	sm.add_node("dance", n_dance, Vector2(0, -180))
 
 	# 全遷移をコード駆動（即時）にする。技間の辺はコンボ木から導出し、
 	# ルートを変更したとき AnimationTree 側に遷移を追記しなくてよいようにする。
@@ -427,6 +472,8 @@ func _build_tree() -> void:
 	for technique in ComboTree.TECHNIQUES:
 		_add_transition_once(sm, ComboTree.state_for_technique(technique), &"locomotion",
 			combo_exit_xfade, transition_keys)
+	_add_transition_once(sm, &"locomotion", &"dance", dance_transition_xfade, transition_keys)
+	_add_transition_once(sm, &"dance", &"locomotion", dance_transition_xfade, transition_keys)
 
 	_tree = AnimationTree.new()
 	_tree.name = "AnimationTree"

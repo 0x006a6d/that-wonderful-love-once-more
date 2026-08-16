@@ -31,6 +31,11 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 
+@export_group("Dance")
+## interact を押して踊っている間の HP 回復量（毎秒）。
+@export var dance_heal_per_second: float = 10.0
+@export_group("")
+
 @export_group("Hurt")
 ## 被弾時のノックバック初速（m/s）。
 @export var hurt_knockback_speed: float = 3.5
@@ -183,6 +188,7 @@ func _lunge_speed_for(technique: StringName) -> float:
 
 func _physics_process(delta: float) -> void:
 	var attacking: bool = _melee != null and bool(_melee.call("is_attacking"))
+	var dancing: bool = _melee != null and bool(_melee.call("is_dancing"))
 
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := _camera_relative_direction(input_dir)
@@ -191,6 +197,12 @@ func _physics_process(delta: float) -> void:
 		_hurt_timer = maxf(_hurt_timer - delta, 0.0)
 	if _downed:
 		_update_down(delta)
+	if dancing and (not Input.is_action_pressed("interact")
+			or not input_dir.is_zero_approx() or _hurt_timer > 0.0 or _downed):
+		_stop_dance()
+		dancing = false
+	if dancing and _health != null:
+		_health.heal(dance_heal_per_second * delta)
 
 	# 速度は目標値へ加減速で寄せる（即時切替をやめて慣性＝質量感を出す）。
 	var horizontal := Vector2(velocity.x, velocity.z)
@@ -204,6 +216,9 @@ func _physics_process(delta: float) -> void:
 	elif attacking:
 		# 攻撃中は移動入力を無視し、強めのブレーキで踏み込み一歩ぶんだけ滑って止まる。
 		horizontal = horizontal.move_toward(Vector2.ZERO, attack_brake * delta)
+	elif dancing:
+		# 回復中は残っていた慣性も含めて水平移動を完全に止める。
+		horizontal = Vector2.ZERO
 	elif direction.length() > 0.001:
 		var target := Vector2(direction.x, direction.z) * move_speed
 		horizontal = horizontal.move_toward(target, accel * delta)
@@ -226,7 +241,7 @@ func _physics_process(delta: float) -> void:
 
 	# カメラの自動追従へ移動方向を注入する（攻撃中・被弾中・停止中は ZERO）。
 	if _camera_rig != null and _camera_rig.has_method("set_move_direction"):
-		var locked: bool = attacking or _downed or _hurt_timer > 0.0
+		var locked: bool = attacking or dancing or _downed or _hurt_timer > 0.0
 		var cam_dir := Vector3.ZERO if locked else direction
 		_camera_rig.call("set_move_direction", cam_dir)
 
@@ -234,12 +249,37 @@ func _physics_process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _downed or _hurt_timer > 0.0:
 		return
+	var dancing: bool = _melee != null and bool(_melee.call("is_dancing"))
+	if dancing:
+		if event.is_action_released("interact") or event.is_action_pressed("attack") \
+				or event.is_action_pressed("kick") or event.is_action_pressed("dodge"):
+			_stop_dance()
+		return
+	if event.is_action_pressed("interact"):
+		_try_start_dance()
+		return
 	if event.is_action_pressed("attack"):
 		if _melee != null:
 			_melee.call("attack")
 	elif event.is_action_pressed("kick"):
 		if _melee != null:
 			_melee.call("kick")
+
+
+func _try_start_dance() -> void:
+	if _melee == null or _downed or _hurt_timer > 0.0:
+		return
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	if not input_dir.is_zero_approx():
+		return
+	if bool(_melee.call("start_dance")):
+		velocity.x = 0.0
+		velocity.z = 0.0
+
+
+func _stop_dance() -> void:
+	if _melee != null:
+		_melee.call("stop_dance")
 
 
 ## MeleeHitbox の Call Method Track から呼ばれる（有効化）。
@@ -271,6 +311,8 @@ func _on_hit_landed(_target: Node3D) -> void:
 ## Hurtbox から呼ばれる。direction は攻撃者→自分の水平方向。
 ## 被弾ロックの間は移動入力と攻撃入力を受け付けない（一方的な連打で押し切れないように）。
 func receive_knockback(direction: Vector3, strength: float) -> void:
+	# 被弾通知自体でダンスを止める。strength=0 の銃撃でもキャンセルされる。
+	_stop_dance()
 	if _downed:
 		return
 	if strength <= 0.0:
@@ -285,6 +327,7 @@ func receive_knockback(direction: Vector3, strength: float) -> void:
 
 ## Hurtbox から呼ばれる。VRM のマテリアルは触らず、カメラで被弾を提示する。
 func flash_hit() -> void:
+	_stop_dance()
 	if _camera_shake != null and _camera_shake.has_method("shake"):
 		_camera_shake.call("shake", hurt_shake_strength)
 
@@ -295,6 +338,7 @@ func flash_hit() -> void:
 func _on_health_downed(_lethal: bool) -> void:
 	if _downed:
 		return
+	_stop_dance()
 	_downed = true
 	_hurt_timer = 0.0
 	_down_timer = down_duration
@@ -362,6 +406,10 @@ func _tilt_model(angle_deg: float, duration: float, ease_type: Tween.EaseType) -
 
 func is_downed() -> bool:
 	return _downed
+
+
+func is_dancing() -> bool:
+	return _melee != null and bool(_melee.call("is_dancing"))
 
 
 func current_hp() -> float:

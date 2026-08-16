@@ -75,7 +75,16 @@ func is_downed() -> bool:
 	return _is_downed
 
 
+## HP を amount だけ回復する。ダウン中は回復せず、よろけ回数も変更しない。
+## 全快に加えて全カウンタを初期化する revive() とは別の通常回復処理。
+func heal(amount: float) -> void:
+	if _is_downed or amount <= 0.0:
+		return
+	_hp = minf(_hp + amount, max_hp)
+
+
 ## HP・よろけ回数・追い打ち状態を初期状態へ戻す。
+## 通常回復だけを行う heal() とは異なり、ダウンからの復帰専用。
 func revive() -> void:
 	_hp = max_hp
 	_stagger_count = 0

@@ -21,7 +21,7 @@
 
 ## モーション: Mixamo モーション一式 (Adobe Mixamo)
 
-- ファイル: `assets/motions/mixamo_*.fbx` (計 42 本)
+- ファイル: `assets/motions/mixamo_*.fbx` (計 43 本)
   - パンチ (11): `mixamo_jab_left` (Lead Jab) / `mixamo_cross_punch` / `mixamo_combo_punch` / `mixamo_punch_combo` / `mixamo_hook_1..4` / `mixamo_elbow_1..3`
   - キック・ひざ (11): `mixamo_knee` (Illegal Knee。kick_1) / `mixamo_kick_finish` (Kicking。kick_2) / `mixamo_kick_mma` (Mma Kick。kick_3) / `mixamo_kick_high_left` (Kicking2。未使用) / `mixamo_kick_roundhouse` (Roundhouse Kick。未使用) / `mixamo_kick_side` (Side Kick。未使用) / `mixamo_kick_soccer` (Kick Soccerball。未使用) / `mixamo_knee_jab` (Knee Jab) / `mixamo_kick_chapa` (Chapa-Giratoria) / `mixamo_kick_martelo` (Martelo 2) / `mixamo_kick_standing` (Standing Melee Kick)
   - 構え (1): `mixamo_boxing_idle` (Boxing)
@@ -30,9 +30,11 @@
   - 歩行・走行 (4): `mixamo_walk` (Walking) / `mixamo_run` (Running) / `mixamo_walk_female` (Female Walk。逸脱時の歩行差し替え候補) / `mixamo_walk_catwalk` (Catwalk Walk Forward。同候補)
   - 銃 (1): `mixamo_rifle_fire` (Firing Rifle)
   - ダウン (6): `mixamo_death_dying` (Dying) / `mixamo_death_front_01` (Death From The Front) / `mixamo_death_back_01` (Death From Back Headshot。元名がプロジェクト制約に触れるため中立名で配置) / `mixamo_death_backward_01` / `mixamo_death_forward_01` / `mixamo_death_left_01` (Standing Death Backward/Forward/Left 01)
+  - 回復ダンス (1): `mixamo_dance_hiphop` (Hip Hop Dancing)
+
 ### ファイル名 ↔ Mixamo 検索名 対応表
 
-Mixamo で各モーションを検索・ダウンロードする際の検索名（Mixamo 上のアニメーション名）と、`assets/motions/` へ配置する際のファイル名の対応。ダウンロードは全て **FBX for Unity / Without Skin**。Hook / Illegal Elbow Punch は Mixamo 上で同名の複数バリエーションがあり、ダウンロード時に `(1)` `(2)` 等の連番が付く。ここでは連番の若い順にファイル名を割り当てている。
+Mixamo で各モーションを検索・ダウンロードする際の検索名（Mixamo 上のアニメーション名）と、`assets/motions/` へ配置する際のファイル名の対応。Hip Hop Dancing 以外は **FBX for Unity / Without Skin**、Hip Hop Dancing だけは **FBX for Unity / With Skin** でダウンロードした（ただし取得ファイルに `MeshInstance3D` はなく、スケルトン + アニメーションのみ）。Hook / Illegal Elbow Punch は Mixamo 上で同名の複数バリエーションがあり、ダウンロード時に `(1)` `(2)` 等の連番が付く。ここでは連番の若い順にファイル名を割り当てている。
 
 | Mixamo 検索名 | 配置ファイル名 |
 | --- | --- |
@@ -78,13 +80,15 @@ Mixamo で各モーションを検索・ダウンロードする際の検索名�
 | Standing Death Backward 01 | `mixamo_death_backward_01.fbx` |
 | Standing Death Forward 01 | `mixamo_death_forward_01.fbx` |
 | Standing Death Left 01 | `mixamo_death_left_01.fbx` |
+| Hip Hop Dancing | `mixamo_dance_hiphop.fbx` |
 
 - 出典: Mixamo (https://www.mixamo.com、Adobe 提供)
 - キャラクター: Ch12_nonPBR。ダウンロードは Without Skin 相当 (メッシュ非同梱、スケルトン + アニメのみ。中身を確認済み。`Ch12_nonPBR` はファイル名の名残でメッシュは入っていない)。
 - ライセンス: Adobe General Terms of Use に基づく。Mixamo のコンテンツは自分の制作物への組み込み利用が可 (ゲーム・映像等)。一方でモーション/キャラを Mixamo 由来のスタンドアロンなアセットとして単体再配布 (素材ファイルそのものの配布・転売) することは不可。
 - 取得日: 2026-08-13
-- 内容: 各 FBX に 1 アニメ (Godot ufbx が sanitize し `mixamo_com` 名)。長さは 0.60s (Hit Reaction) 〜 4.40s (Dying)。右ストレート用に Cross_Punch を採用 (数値 QC 済)、他は被弾・回避・ダウン・銃・キック・コンボ素材として導入。全 29 本が同一の 65 ボーンスケルトン (Without Skin) で、`mixamo_bone_map.tres` 1 つでリターゲットする。
-- スケルトン命名: Mixamo 命名だが Godot 4.7 の ufbx インポータがコロンを sanitize するため、インポート後のボーン名は `mixamorig4_Hips` 等 (元は `mixamorig:Hips`)。BoneMap (`assets/motions/mixamo_bone_map.tres`) はこの sanitize 後の名前でエイリアスを張っている。
+- 内容: 各 FBX に 1 アニメ (Godot ufbx が sanitize し `mixamo_com` 名)。Hip Hop Dancing は 15.77s / 53 トラックで、`interact` 長押し中の回復ダンスに使用する。ほか42本は被弾・回避・ダウン・銃・キック・コンボ・移動素材として導入している。
+- Hip Hop Dancing: Mixamo 名 `Hip Hop Dancing`、取得ファイル `Ch45_nonPBR@Hip Hop Dancing.fbx`、配置名 `assets/motions/mixamo_dance_hiphop.fbx`。**With Skin** でダウンロードしたが、インポート結果は `Skeleton3D` + `AnimationPlayer` のみでメッシュ非同梱。取得日: 2026-08-16。
+- スケルトン命名: ダンス以外の42本は sanitize 後が `mixamorig4_Hips` 等で、`mixamo_bone_map.tres` を使う。Hip Hop Dancing は `mixamorig1_Hips` 等になるため、専用 BoneMap `assets/motions/mixamo_bone_map_rig1.tres` を使う。Mixamo はダウンロードごとに `mixamorig` 後の数字が変わりうるため、接頭辞が一致しない BoneMap を流用しない。
 - 公開時の注意: 上記のとおり Mixamo 由来 FBX の生ファイルは単体再配布不可。**このリポジトリを一般公開する場合、`assets/motions/mixamo_*.fbx` の生ファイルをそのまま含めてよいかはライセンス上の要注意事項**であり、公開前に FBX を除外する / 別途権利処理する等の判断が要る。
 
 ## 取得予定（未取得）

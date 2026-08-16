@@ -22,7 +22,7 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 
    AIニケちゃん公式リポジトリの VRM を `assets/vrm/nikechan_player.vrm` としてダウンロードする（既にあればスキップ）。プロジェクトは主人公モデルをこの固定名で参照する。
 
-2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で `docs/asset-credits.md` の対応表にある各モーションを検索し、**FBX for Unity / Without Skin**（メッシュ非同梱）でダウンロードして、対応表の `mixamo_*.fbx` 名にリネームし `assets/motions/` へ配置する（計 29 本）。ファイル名と検索名の対応は同ドキュメントの表を参照。
+2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で `docs/asset-credits.md` の対応表にある各モーションを検索し、Hip Hop Dancing 以外は **FBX for Unity / Without Skin**、Hip Hop Dancing は **FBX for Unity / With Skin** でダウンロードする。対応表の `mixamo_*.fbx` 名にリネームして `assets/motions/` へ配置する（計 43 本）。ファイル名、検索名、専用 BoneMap の対応は同ドキュメントを参照。
 
 3. Godot 4.7.1 でプロジェクトを開く。初回起動時に FBX / VRM がインポートされる。
 
