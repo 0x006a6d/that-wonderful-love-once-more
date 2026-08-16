@@ -23,7 +23,7 @@
 
 - 出典: Mixamo (https://www.mixamo.com、Adobe 提供)
 - ライセンス: Adobe General Terms of Use に基づく。自分の制作物への組み込み利用は可（ゲーム・映像等）。一方で、モーションを Mixamo 由来のスタンドアロンなアセットとして単体再配布（素材ファイルそのものの配布・転売）することは不可。このため `assets/motions/mixamo_*.fbx` はリポジトリに含めていない
-- 取得日: 2026-08-13（Hip Hop Dancing のみ 2026-08-16）
+- 取得日: 2026-08-13（Head Spinning のみ 2026-08-16）
 - 形式: 各 FBX に 1 アニメ（Godot の ufbx が sanitize して `mixamo_com` 名になる）
 
 ### 実行時に必要（3本）
@@ -34,7 +34,7 @@
 | --- | --- | --- |
 | Walking | `mixamo_walk.fbx` | 歩行 |
 | Running | `mixamo_run.fbx` | 走行 |
-| Hip Hop Dancing | `mixamo_dance_hiphop.fbx` | `interact` 長押し中の回復ダンス（15.77s / 53 トラック） |
+| Head Spinning | `mixamo_dance_headspin.fbx` | `interact` 長押し中の回復ダンス（0.833s / 53 トラック） |
 
 待機モーションは Quaternius の glTF（上記）を使うため、Mixamo 側には無い。
 
@@ -55,7 +55,7 @@ Hook は Mixamo 上で同名の複数バリエーションがあり、ダウン�
 
 ### ダウンロード時の設定
 
-Hip Hop Dancing 以外は **FBX for Unity / Without Skin**、Hip Hop Dancing だけ **FBX for Unity / With Skin**（取得ファイル `Ch45_nonPBR@Hip Hop Dancing.fbx`。ただしインポート結果は `Skeleton3D` + `AnimationPlayer` のみでメッシュは入っていない）。
+Head Spinning 以外は **FBX for Unity / Without Skin**、Head Spinning だけ **FBX for Unity / With Skin**（取得ファイル `Ch45_nonPBR@Head Spinning.fbx`）。Godot 4.7.1 でのインポート結果は `Skeleton3D` + `AnimationPlayer` のみで、`MeshInstance3D` は入っていない。
 
 ### スケルトン命名と BoneMap
 
@@ -63,8 +63,8 @@ Mixamo 元来の命名は `mixamorig:Hips` だが、Godot 4.7 の ufbx インポ
 
 | 命名 | 対象 | BoneMap |
 | --- | --- | --- |
-| `mixamorig4_*` | Hip Hop Dancing 以外 | `assets/motions/mixamo_bone_map.tres` |
-| `mixamorig1_*` | Hip Hop Dancing | `assets/motions/mixamo_bone_map_rig1.tres` |
+| `mixamorig4_*` | Head Spinning 以外 | `assets/motions/mixamo_bone_map.tres` |
+| `mixamorig1_*` | Head Spinning | `assets/motions/mixamo_bone_map_rig1.tres` |
 
 接頭辞が一致しない BoneMap を流用するとリターゲットが通らず、ボーン名が `mixamorig1_*` のまま残る。新しい素材を足す際は `tools/generate_mixamo_bone_map.gd --prefix=<接頭辞> --output=<保存先>` で BoneMap を生成する。
 

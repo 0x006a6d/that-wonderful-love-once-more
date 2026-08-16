@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://d2aa4wl01ijye"
-path="res://.godot/imported/mixamo_dance_hiphop.fbx-48b9888c53164af207507616a992b8d8.scn"
+uid="uid://dotr5fsgbgurs"
+path="res://.godot/imported/mixamo_dance_headspin.fbx-4a8c2c0f5f94591e06320d5eac871d88.scn"
 
 [deps]
 
-source_file="res://assets/motions/mixamo_dance_hiphop.fbx"
-dest_files=["res://.godot/imported/mixamo_dance_hiphop.fbx-48b9888c53164af207507616a992b8d8.scn"]
+source_file="res://assets/motions/mixamo_dance_headspin.fbx"
+dest_files=["res://.godot/imported/mixamo_dance_headspin.fbx-4a8c2c0f5f94591e06320d5eac871d88.scn"]
 
 [params]
 

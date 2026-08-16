@@ -19,6 +19,7 @@ const HIT_MIN_HORIZONTAL_DISTANCE: float = 0.01
 const STATE_WAIT_FRAMES: int = 60
 const HURT_LOCK_WAIT_FRAMES: int = 30
 const STOP_TEST_DAMAGE: float = 5.0
+const DANCE_ANIMATION: StringName = &"player/dance"
 
 var _pass: int = 0
 var _fail: int = 0
@@ -188,6 +189,13 @@ func _setup() -> bool:
 	var tree: AnimationTree = _melee.get_node_or_null(^"AnimationTree") as AnimationTree
 	if _skeleton == null or tree == null:
 		return false
+	var animation_player: AnimationPlayer = _find_animation_player(_model)
+	if animation_player == null or not animation_player.has_animation(DANCE_ANIMATION):
+		return false
+	var dance_animation: Animation = animation_player.get_animation(DANCE_ANIMATION)
+	print("[clip] name=%s length=%.3fs tracks=%d" % [
+		DANCE_ANIMATION, dance_animation.length, dance_animation.get_track_count()
+	])
 	_playback = tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
 	await _wait_frames(5)
 	return _playback != null
@@ -257,6 +265,16 @@ func _find_skeleton(node: Node) -> Skeleton3D:
 		return node as Skeleton3D
 	for child: Node in node.get_children():
 		var found: Skeleton3D = _find_skeleton(child)
+		if found != null:
+			return found
+	return null
+
+
+func _find_animation_player(node: Node) -> AnimationPlayer:
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	for child: Node in node.get_children():
+		var found: AnimationPlayer = _find_animation_player(child)
 		if found != null:
 			return found
 	return null

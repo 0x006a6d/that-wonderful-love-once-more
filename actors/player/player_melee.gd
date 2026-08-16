@@ -42,7 +42,7 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 
 @export_group("Dance Clip")
 ## 回復ダンス。locomotion と同様に FBX シーンとアニメーション名で読み込む。
-@export_file("*.gltf", "*.fbx") var dance_scene: String = "res://assets/motions/mixamo_dance_hiphop.fbx"
+@export_file("*.gltf", "*.fbx") var dance_scene: String = "res://assets/motions/mixamo_dance_headspin.fbx"
 @export var dance_key: String = "mixamo_com"
 ## locomotion と dance 間のクロスフェード秒数。
 @export var dance_transition_xfade: float = 0.15

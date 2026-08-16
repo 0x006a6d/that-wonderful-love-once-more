@@ -96,7 +96,7 @@ enum Ending { IDEAL, NORMAL, DRIFT, FAILURE }
 
 - **トゥーンシェーダーを自作しない。** `godot-vrm` が MToon シェーダーを同梱しており、インポート時に自動適用される。`shaders/toon_character.gdshader` は作らない
 - **アニメーションはリターゲットを使う。** VRMはHumanoidボーン構造のため、インポート設定で `SkeletonProfileHumanoid` を指定すれば既製のヒューマノイドモーションを流用できる。格闘モーションを一から作らない
-- **Mixamo の BoneMap は sanitize 後の接頭辞ごとに持つ。** Mixamo の元ボーン名が同じでも、Godot ufbx がコロンを置換した後の接頭辞はダウンロードごとに `mixamorig4_` / `mixamorig1_` のように変わりうる。BoneMap のソース名はこの接頭辞まで一致する必要があるため、既存モーション用 `mixamo_bone_map.tres`（`mixamorig4_*`）と Hip Hop Dancing 用 `mixamo_bone_map_rig1.tres`（`mixamorig1_*`）を分け、取り違えない。`tools/generate_mixamo_bone_map.gd` は引数なしなら従来版を生成し、`--prefix mixamorig1_ --output res://assets/motions/mixamo_bone_map_rig1.tres` で専用版を生成する
+- **Mixamo の BoneMap は sanitize 後の接頭辞ごとに持つ。** Mixamo の元ボーン名が同じでも、Godot ufbx がコロンを置換した後の接頭辞はダウンロードごとに `mixamorig4_` / `mixamorig1_` のように変わりうる。BoneMap のソース名はこの接頭辞まで一致する必要があるため、既存モーション用 `mixamo_bone_map.tres`（`mixamorig4_*`）と Head Spinning 用 `mixamo_bone_map_rig1.tres`（`mixamorig1_*`）を分け、取り違えない。`tools/generate_mixamo_bone_map.gd` は引数なしなら従来版を生成し、`--prefix mixamorig1_ --output res://assets/motions/mixamo_bone_map_rig1.tres` で専用版を生成する
 - **SpringBone をそのまま残す。** 髪と衣装の揺れは `VRMSpringBone` として自動で入る。手を加えない
 - **ラグドールは全ボーンに作らない。** VRMはボーン数が多く、SpringBone も含まれるため、`Skeleton3D` 全体に Physical Skeleton を生成すると破綻する。`PhysicalBoneSimulator3D` には以下の主要ボーンのみを対象にする
     - `hips` / `spine` / `chest` / `head`
@@ -413,7 +413,7 @@ Call Method Track が持ち、木の段数では変化させない。
 
 ### 6.2.2 回復ダンス
 
-`interact`（E / ○）を押している間、`AnimationTree` の `dance` ステートで Hip Hop Dancing
+`interact`（E / ○）を押している間、`AnimationTree` の `dance` ステートで Head Spinning
 をループ再生し、毎秒 `dance_heal_per_second` だけ HP を回復する。遷移は
 `locomotion → dance → locomotion` の2辺だけを持ち、コンボ木の技間遷移や入力列には
 接続しない。攻撃中・回避中・被弾ロック中・ダウン中からは開始できない。
@@ -421,7 +421,7 @@ Call Method Track が持ち、木の段数では変化させない。
 |`@export`|既定値|用途|
 |---|---:|---|
 |`player.gd: dance_heal_per_second`|10.0 HP/s|長押し中の回復速度|
-|`player_melee.gd: dance_scene`|`res://assets/motions/mixamo_dance_hiphop.fbx`|ダンス素材のシーンパス|
+|`player_melee.gd: dance_scene`|`res://assets/motions/mixamo_dance_headspin.fbx`|ダンス素材のシーンパス（0.833s / 53トラック）|
 |`player_melee.gd: dance_key`|`mixamo_com`|FBX 内のアニメーション名|
 |`player_melee.gd: dance_transition_xfade`|0.15 s|locomotion とのクロスフェード|
 
