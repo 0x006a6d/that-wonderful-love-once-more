@@ -363,6 +363,53 @@ enum PlayerState {
 2. カメラのオフセットとFOV
 3. `move_speed` と回避可否
 
+### 6.2.1 コンボ木
+
+`P` は `attack`（□ / J）、`K` は `kick`（× / K）。近接は次の木だけを持つ。
+
+```text
+P → 左ジャブ
+     ├ P → 右ストレート
+     │      ├ P → 左フック                          … 既存パンチ3段
+     │      └ K → 右膝 → P → 左フック → K → 右ハイ   … ルート3
+     └ K → 右膝
+            ├ P → 左ジャブ → P → 右ストレート        … ルート1
+            └ K → 右ミドル → P → 左フック            … ルート2
+K → 右膝
+     ├ K → 右ミドル → K → 右ハイ                     … 既存キック3段
+     └ P → 左フック → P → 右ストレート → P → 左ジャブ
+            → K → 右膝 → P → 左フック → K → 右ハイ   … ルート4
+```
+
+この木に無い入力は予約せず、その入力が対応する段までで打ち止めにして待機へ戻す。
+打ち止め後の入力を同じ先行入力として復活させない。入力は1押し1発で、
+`press_debounce_frames` と各技の抜け割合で区切られる受付中だけ先行入力列へ追加する。
+
+木の構造は `actors/player/combo_tree.gd` の `ROOTS` / `NODES` にデータとして定義する。
+各ノードは「再生する技」と「`punch` / `kick` 入力から次ノードへの対応」を持つ。
+`player_melee.gd` は現在ノードと入力列からこの表をたどり、AnimationTree の技間遷移も
+同じ表から組み立てる。ルートの増減時に遷移ロジックを別途変更しない。
+
+|技|AnimationTree クリップ|抜け割合 `@export`（既定値）|踏み込み初速 `@export`（既定値）|
+|---|---|---:|---:|
+|左ジャブ|`melee_1`|`jab_out_ratio = 0.85`|`jab_lunge_speed = 1.5 m/s`|
+|右ストレート|`melee_2`|`straight_out_ratio = 0.90`|`straight_lunge_speed = 2.5 m/s`|
+|左フック|`melee_3`|`hook_out_ratio = 0.95`|`hook_lunge_speed = 3.5 m/s`|
+|右膝（Illegal Knee）|`kick_1`|`knee_out_ratio = 0.85`|`knee_lunge_speed = 3.0 m/s`|
+|右ミドル（Kicking）|`kick_2`|`middle_out_ratio = 0.90`|`middle_lunge_speed = 2.0 m/s`|
+|右ハイ（Mma Kick）|`kick_3`|`high_out_ratio = 0.95`|`high_lunge_speed = 2.0 m/s`|
+
+踏み込みは `技の初速 × pow(lunge_stage_multiplier, 段数 - 1)` とする。
+`lunge_stage_multiplier` の既定値は `1.0`（段による変化なし）。後段がノックバック後の
+相手へ届かない場合はこの値を上げ、木に同じ技が再登場しても技の基礎値自体は変えない。
+既存の `lunge_speeds = (1.5, 2.5, 3.5)` はジャブ・ストレート・フックへ、
+`kick_lunge_speeds = (3.0, 2.0, 2.0)` は膝・ミドル・ハイへ引き継ぐ。
+
+その他のコンボ調整用 `@export` は `press_debounce_frames = 4`、
+`combo_start_xfade = 0.08 s`、`combo_transition_xfade = 0.05 s`、
+`combo_exit_xfade = 0.20 s`。判定窓、ダメージ、ノックバックは従来どおり各クリップの
+Call Method Track が持ち、木の段数では変化させない。
+
 ### 6.3 攻撃判定
 
 `MeleeHitbox` は `AnimationPlayer` の **Call Method Track** で有効/無効を切り替える。コード側でタイマーを持たない。

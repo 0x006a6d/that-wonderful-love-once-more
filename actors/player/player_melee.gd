@@ -1,17 +1,16 @@
 extends Node
 
 ## プレイヤーのアニメーション制御。
-## locomotion(idle/walk/run ブレンド) から2系統の独立3段コンボ:
-##   パンチ: melee_1(左ジャブ) → melee_2(右ストレート) → melee_3(左フック)
-##   キック: kick_1(右ひざ) → kick_2(左ハイキック) → kick_3(右回し蹴り)
+## locomotion(idle/walk/run ブレンド) と、入力列で分岐する近接コンボ木を駆動する。
 ##
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
 ## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
 ## - melee_1..3: 生成済み .res（単発クリップ + Call Method Track 付き）
 ##
 ## 入力の流れ（1 押し 1 発）:
-##   attack() → locomotion なら melee_1。各段の連鎖受付窓内の再押下のみ次段を予約。
-##   予約が無ければその段で locomotion に戻る。melee_3 で打ち止め。
+##   attack()/kick() → locomotion なら対応するルートを開始。
+##   各段の連鎖受付窓内の再押下だけを入力列として予約し、combo_tree.gd をたどる。
+##   未定義入力は予約せず、その段までで locomotion に戻る。
 ##
 ## ゲームロジック（player.gd）→ このノード（AnimationTree駆動）の一方向依存のみ。
 ## Call Method Track が叩く _enable_hitbox / _disable_hitbox は player.gd 側に置く。
@@ -22,6 +21,7 @@ const MELEE_3_RES: String = "res://actors/player/anim/melee_3.res"
 const KICK_1_RES: String = "res://actors/player/anim/kick_1.res"
 const KICK_2_RES: String = "res://actors/player/anim/kick_2.res"
 const KICK_3_RES: String = "res://actors/player/anim/kick_3.res"
+const ComboTree := preload("res://actors/player/combo_tree.gd")
 
 ## VRM をインスタンス化した Model ノード。
 @export var model_path: NodePath = ^"../Model"
@@ -50,26 +50,31 @@ const KICK_3_RES: String = "res://actors/player/anim/kick_3.res"
 @export var anim_speed_limits: Vector2 = Vector2(0.8, 1.8)
 
 @export_group("Combo")
-## melee_1（左ジャブ）をこの再生割合まで進めたら次段/待機へ抜ける
+## 左ジャブをこの再生割合まで進めたら次段/待機へ抜ける
 ## （判定窓の終了 73% の直後）。
-@export var melee_1_out_ratio: float = 0.85
-## melee_2（右ストレート）をこの再生割合まで進めたら次段/待機へ抜ける
+@export var jab_out_ratio: float = 0.85
+## 右ストレートをこの再生割合まで進めたら次段/待機へ抜ける
 ## （判定窓の終了 81% の直後）。
-@export var melee_2_out_ratio: float = 0.90
-## melee_3（右フック）をこの再生割合まで進めたら待機へ抜ける（判定窓の終了 89% の直後）。
-@export var melee_3_out_ratio: float = 0.95
-## kick_1（右ひざ）の抜け割合（判定窓の終了 74% の直後）。
-@export var kick_1_out_ratio: float = 0.85
-## kick_2（左ハイキック）の抜け割合（判定窓の終了 80% の直後）。
-@export var kick_2_out_ratio: float = 0.90
-## kick_3（右回し蹴り、フィニッシュ）の抜け割合（判定窓の終了 89% の直後）。
-@export var kick_3_out_ratio: float = 0.95
+@export var straight_out_ratio: float = 0.90
+## 左フックの抜け割合（判定窓の終了 89% の直後）。
+@export var hook_out_ratio: float = 0.95
+## 右膝の抜け割合（判定窓の終了 74% の直後）。
+@export var knee_out_ratio: float = 0.85
+## 右ミドルの抜け割合（判定窓の終了 80% の直後）。
+@export var middle_out_ratio: float = 0.90
+## 右ハイの抜け割合（判定窓の終了 89% の直後）。
+@export var high_out_ratio: float = 0.95
 ## 押下のデバウンス（物理フレーム数）。この間隔未満で届いた連続押下は
 ## 物理バウンス・パッドの二重イベントとして無視する（4f ≈ 66ms @60Hz）。
 ## 実時間でなく物理フレーム基準なのは、headless/ムービー実行でも決定的にするため。
-## それ以外の押下は全て先行入力キューに積み、各段の終わりで消化する
-## （「受付窓」方式は窓外の押下が消え、連打テンポ次第でフックが出ない欠陥があった）。
+## それ以外の受付窓内の押下は先行入力キューに積み、各段の終わりで消化する。
 @export var press_debounce_frames: int = 4
+## locomotion から初段へ入るクロスフェード秒数。
+@export var combo_start_xfade: float = 0.08
+## 技から次の技へ繋ぐクロスフェード秒数。
+@export var combo_transition_xfade: float = 0.05
+## 技から locomotion へ戻るクロスフェード秒数。
+@export var combo_exit_xfade: float = 0.20
 @export_group("")
 
 signal combo_started()
@@ -81,14 +86,18 @@ var _state_machine: AnimationNodeStateMachinePlayback = null
 var _model: Node3D = null
 
 var _state: String = "locomotion"
-## 先行入力キュー（残り段数を超えて積まない）。パンチ・キックで共用
-## （同時には一方のコンボしか走らないため）。
-var _queued: int = 0
+var _combo_node: StringName = &""
+var _combo_stage: int = 0
+## 先行入力列。追加時に木を投影して、存在する遷移だけを保持する。
+var _queued_inputs: Array[StringName] = []
+## 未定義入力を受けたら閉じ、同じコンボ中の後続入力も保持しない。
+var _queue_closed: bool = false
 var _last_press_frame: int = -1000
 var _last_kick_frame: int = -1000
 
-## コンボの段が始まった（kind: "punch"/"kick"、stage: 1..3）。踏み込み等の駆動用。
-signal stage_started(kind: StringName, stage: int)
+## コンボの段が始まった（technique: jab/straight/hook/knee/middle/high）。
+## stage はルート内の1始まり段数で、踏み込み倍率等の駆動に使う。
+signal stage_started(technique: StringName, stage: int)
 
 
 func _ready() -> void:
@@ -115,48 +124,31 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if _state_machine == null:
 		return
-	# クリップ終端の検出は再生位置で行う（自動遷移に任せず、バッファ分岐をコードで握る）。
-	if _state == "melee_1":
-		if _reached_ratio("melee_1", melee_1_out_ratio):
-			if _queued > 0:
-				_queued -= 1
-				_advance_to("melee_2", &"punch", 2)
-			else:
-				_finish_combo()
-	elif _state == "melee_2":
-		if _reached_ratio("melee_2", melee_2_out_ratio):
-			if _queued > 0:
-				_queued -= 1
-				_advance_to("melee_3", &"punch", 3)
-			else:
-				_finish_combo()
-	elif _state == "melee_3":
-		if _reached_ratio("melee_3", melee_3_out_ratio):
-			_finish_combo()
-	elif _state == "kick_1":
-		if _reached_ratio("kick_1", kick_1_out_ratio):
-			if _queued > 0:
-				_queued -= 1
-				_advance_to("kick_2", &"kick", 2)
-			else:
-				_finish_combo()
-	elif _state == "kick_2":
-		if _reached_ratio("kick_2", kick_2_out_ratio):
-			if _queued > 0:
-				_queued -= 1
-				_advance_to("kick_3", &"kick", 3)
-			else:
-				_finish_combo()
-	elif _state == "kick_3":
-		if _reached_ratio("kick_3", kick_3_out_ratio):
-			_finish_combo()
+	if _state == "locomotion":
+		return
+	# クリップ終端の検出は再生位置で行う（自動遷移に任せず、入力列の分岐をコードで握る）。
+	var technique := ComboTree.technique_for(_combo_node)
+	if not _reached_ratio(_state, _out_ratio_for(technique)):
+		return
+	if _queued_inputs.is_empty():
+		_finish_combo()
+		return
+	var input_kind: StringName = _queued_inputs.pop_front()
+	var next_node := ComboTree.next_node(_combo_node, input_kind)
+	if next_node == &"":
+		_finish_combo()
+		return
+	_advance_to(next_node)
 
 
 ## キューを消化して次段へ進む。
-func _advance_to(next_state: String, kind: StringName, stage: int) -> void:
-	_state = next_state
-	_state_machine.travel(next_state)
-	stage_started.emit(kind, stage)
+func _advance_to(next_node: StringName) -> void:
+	_combo_node = next_node
+	_combo_stage += 1
+	var technique := ComboTree.technique_for(_combo_node)
+	_state = String(ComboTree.state_for_technique(technique))
+	_state_machine.travel(_state)
+	stage_started.emit(technique, _combo_stage)
 
 
 ## 現在ステートのクリップが指定割合まで再生されたか。
@@ -166,6 +158,23 @@ func _reached_ratio(state_name: String, ratio: float) -> bool:
 	var length := _state_machine.get_current_length()
 	var pos := _state_machine.get_current_play_position()
 	return length > 0.0 and pos >= length * ratio
+
+
+func _out_ratio_for(technique: StringName) -> float:
+	match technique:
+		ComboTree.TECHNIQUE_JAB:
+			return jab_out_ratio
+		ComboTree.TECHNIQUE_STRAIGHT:
+			return straight_out_ratio
+		ComboTree.TECHNIQUE_HOOK:
+			return hook_out_ratio
+		ComboTree.TECHNIQUE_KNEE:
+			return knee_out_ratio
+		ComboTree.TECHNIQUE_MIDDLE:
+			return middle_out_ratio
+		ComboTree.TECHNIQUE_HIGH:
+			return high_out_ratio
+	return 1.0
 
 
 ## player.gd の locomotion 更新。速度に応じて idle(0)→walk(0.5)→jog(1.0) をブレンド。
@@ -199,9 +208,8 @@ func _anim_speed_scale(speed: float, blend: float) -> float:
 ## 攻撃入力（押下イベント 1 回につき 1 コール。押しっぱなしでは再コールされない）。
 ## - デバウンス: 前回受理した押下から press_debounce_frames 未満の押下は
 ##   物理バウンス/二重イベントとして無視（1 押し 1 発の保証）
-## - locomotion: melee_1 を開始。この押下はここで消費され、連鎖には使われない
-## - melee_1 / melee_2 中: 先行入力キューに積む（残り段数まで）。段の終わりで消化
-## - melee_3 中: 無視（3 段で打ち止め）
+## - locomotion: P ルートを開始。この押下はここで消費され、連鎖には使われない
+## - コンボ中: 木に存在する P 遷移だけを先行入力キューへ積む
 func attack() -> void:
 	if _state_machine == null:
 		return
@@ -209,21 +217,10 @@ func attack() -> void:
 	if now - _last_press_frame < press_debounce_frames:
 		return
 	_last_press_frame = now
-	if _state == "locomotion":
-		_state = "melee_1"
-		_queued = 0
-		_state_machine.travel("melee_1")
-		combo_started.emit()
-		stage_started.emit(&"punch", 1)
-	elif _state == "melee_1":
-		_queued = mini(_queued + 1, 2)
-	elif _state == "melee_2":
-		_queued = mini(_queued + 1, 1)
-	# キックコンボ中のパンチ入力は無視（混合コンボは将来対応）。
+	_accept_input(ComboTree.INPUT_PUNCH)
 
 
-## キック入力。attack() と同じキュー/デバウンス方式の独立3段。
-## パンチコンボ中のキック入力・キックコンボ中のパンチ入力は互いに無視する。
+## キック入力。attack() と同じキュー/デバウンス方式で K 遷移を選ぶ。
 func kick() -> void:
 	if _state_machine == null:
 		return
@@ -231,16 +228,50 @@ func kick() -> void:
 	if now - _last_kick_frame < press_debounce_frames:
 		return
 	_last_kick_frame = now
+	_accept_input(ComboTree.INPUT_KICK)
+
+
+func _accept_input(input_kind: StringName) -> void:
 	if _state == "locomotion":
-		_state = "kick_1"
-		_queued = 0
-		_state_machine.travel("kick_1")
-		combo_started.emit()
-		stage_started.emit(&"kick", 1)
-	elif _state == "kick_1":
-		_queued = mini(_queued + 1, 2)
-	elif _state == "kick_2":
-		_queued = mini(_queued + 1, 1)
+		_start_combo(ComboTree.root_for(input_kind))
+		return
+	if _queue_closed:
+		return
+	# 抜け割合を過ぎた入力は、同じ物理フレームで終端処理より先に届いても予約しない。
+	var technique := ComboTree.technique_for(_combo_node)
+	if _reached_ratio(_state, _out_ratio_for(technique)):
+		_queue_closed = true
+		return
+	var projected_node := _projected_node()
+	var next_node := ComboTree.next_node(projected_node, input_kind)
+	if next_node == &"":
+		# ルート外入力が来た時点でこのコンボの入力受付を閉じる。
+		_queue_closed = true
+		return
+	_queued_inputs.append(input_kind)
+
+
+func _start_combo(root_node: StringName) -> void:
+	if root_node == &"":
+		return
+	_combo_node = root_node
+	_combo_stage = 1
+	_queued_inputs.clear()
+	_queue_closed = false
+	var technique := ComboTree.technique_for(_combo_node)
+	_state = String(ComboTree.state_for_technique(technique))
+	_state_machine.travel(_state)
+	combo_started.emit()
+	stage_started.emit(technique, _combo_stage)
+
+
+func _projected_node() -> StringName:
+	var projected := _combo_node
+	for input_kind in _queued_inputs:
+		projected = ComboTree.next_node(projected, input_kind)
+		if projected == &"":
+			break
+	return projected
 
 
 func is_attacking() -> bool:
@@ -249,7 +280,10 @@ func is_attacking() -> bool:
 
 func _finish_combo() -> void:
 	_state = "locomotion"
-	_queued = 0
+	_combo_node = &""
+	_combo_stage = 0
+	_queued_inputs.clear()
+	_queue_closed = false
 	_state_machine.travel("locomotion")
 	combo_finished.emit()
 
@@ -374,19 +408,25 @@ func _build_tree() -> void:
 	sm.add_node("kick_2", n_k2, Vector2(600, 150))
 	sm.add_node("kick_3", n_k3, Vector2(900, 150))
 
-	# 全遷移をコード駆動（即時）にする。終端検出と分岐は _physics_process が握る。
-	_add_transition(sm, "locomotion", "melee_1", 0.08)
-	_add_transition(sm, "melee_1", "melee_2", 0.05)
-	_add_transition(sm, "melee_2", "melee_3", 0.05)
-	_add_transition(sm, "melee_1", "locomotion", 0.15)
-	_add_transition(sm, "melee_2", "locomotion", 0.20)
-	_add_transition(sm, "melee_3", "locomotion", 0.20)
-	_add_transition(sm, "locomotion", "kick_1", 0.08)
-	_add_transition(sm, "kick_1", "kick_2", 0.05)
-	_add_transition(sm, "kick_2", "kick_3", 0.05)
-	_add_transition(sm, "kick_1", "locomotion", 0.15)
-	_add_transition(sm, "kick_2", "locomotion", 0.20)
-	_add_transition(sm, "kick_3", "locomotion", 0.20)
+	# 全遷移をコード駆動（即時）にする。技間の辺はコンボ木から導出し、
+	# ルートを変更したとき AnimationTree 側に遷移を追記しなくてよいようにする。
+	var transition_keys: Dictionary = {}
+	for root_input in [ComboTree.INPUT_PUNCH, ComboTree.INPUT_KICK]:
+		var root_node := ComboTree.root_for(root_input)
+		_add_transition_once(sm, &"locomotion", ComboTree.state_for_node(root_node),
+			combo_start_xfade, transition_keys)
+	for node_key in ComboTree.NODES:
+		var node_id := StringName(node_key)
+		var from_state := ComboTree.state_for_node(node_id)
+		for input_kind in [ComboTree.INPUT_PUNCH, ComboTree.INPUT_KICK]:
+			var next_node := ComboTree.next_node(node_id, input_kind)
+			if next_node == &"":
+				continue
+			_add_transition_once(sm, from_state, ComboTree.state_for_node(next_node),
+				combo_transition_xfade, transition_keys)
+	for technique in ComboTree.TECHNIQUES:
+		_add_transition_once(sm, ComboTree.state_for_technique(technique), &"locomotion",
+			combo_exit_xfade, transition_keys)
 
 	_tree = AnimationTree.new()
 	_tree.name = "AnimationTree"
@@ -401,7 +441,16 @@ func _build_tree() -> void:
 	_state_machine.start("locomotion")
 
 
-func _add_transition(sm: AnimationNodeStateMachine, from: String, to: String,
+func _add_transition_once(sm: AnimationNodeStateMachine, from: StringName, to: StringName,
+		xfade: float, transition_keys: Dictionary) -> void:
+	var key := String(from) + ">" + String(to)
+	if transition_keys.has(key):
+		return
+	transition_keys[key] = true
+	_add_transition(sm, from, to, xfade)
+
+
+func _add_transition(sm: AnimationNodeStateMachine, from: StringName, to: StringName,
 		xfade: float) -> void:
 	var tr := AnimationNodeStateMachineTransition.new()
 	tr.xfade_time = xfade

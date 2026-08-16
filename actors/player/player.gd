@@ -6,6 +6,8 @@ extends CharacterBody3D
 ## _enable_hitbox / _disable_hitbox を叩いて行う（コードでタイマーを持たない・§6.3）。
 ## 命中時（Hitbox.hit_landed）に手応え演出（ヒットストップ＋カメラシェイク）を起動する。
 
+const ComboTree := preload("res://actors/player/combo_tree.gd")
+
 ## 平地移動速度（m/s）。身長160cm 基準の等身に合わせた既定値。
 @export var move_speed: float = 4.5
 ## 加速度（m/s²）。一歩目がわずかに遅れることで質量感を出す。
@@ -14,13 +16,18 @@ extends CharacterBody3D
 @export var decel: float = 14.0
 ## 攻撃開始時のブレーキ（m/s²）。移動慣性を踏み込み一歩ぶんだけ残して殺す。
 @export var attack_brake: float = 30.0
-## パンチ各段の踏み込み初速（m/s、x=ジャブ y=ストレート z=フック）。
-## 段が進むほど深く踏み込み、ノックバックした相手にフィニッシュが届くようにする。
-## attack_brake で減衰するため「一歩踏み込んで止まる」挙動になる。
-@export var lunge_speeds: Vector3 = Vector3(1.5, 2.5, 3.5)
-## キック各段の踏み込み初速（m/s、x=ひざ y=左ハイ z=回し蹴り）。
-## 初段のひざは射程が短いため深めに踏み込む。
-@export var kick_lunge_speeds: Vector3 = Vector3(3.0, 2.0, 2.0)
+@export_group("Melee Lunge")
+## 技ごとの踏み込み初速（m/s）。attack_brake で減衰し、一歩踏み込んで止まる。
+@export var jab_lunge_speed: float = 1.5
+@export var straight_lunge_speed: float = 2.5
+@export var hook_lunge_speed: float = 3.5
+## 右膝は射程が短いため、既存キック初段の深い踏み込みを引き継ぐ。
+@export var knee_lunge_speed: float = 3.0
+@export var middle_lunge_speed: float = 2.0
+@export var high_lunge_speed: float = 2.0
+## 2段目以降へ進むたびに累乗する倍率。1.0 なら段による変化なし。
+@export_range(0.0, 3.0, 0.05, "or_greater") var lunge_stage_multiplier: float = 1.0
+@export_group("")
 ## 移動方向へ向き直る回転補間の速さ（rad/s 相当の lerp 係数）。
 @export var rotation_speed: float = 12.0
 
@@ -146,15 +153,32 @@ func _clear_melee_targetable() -> void:
 
 
 ## コンボの段開始で前方へ踏み込む（attack_brake が減衰を担う）。
-func _on_stage_started(kind: StringName, stage: int) -> void:
+func _on_stage_started(technique: StringName, stage: int) -> void:
 	if _model == null:
 		return
 	var yaw := _model.global_rotation.y
 	var forward := Vector3(sin(yaw), 0.0, cos(yaw))
-	var speeds := kick_lunge_speeds if kind == &"kick" else lunge_speeds
-	var speed_for_stage: float = [speeds.x, speeds.y, speeds.z][stage - 1]
+	var stage_scale := pow(lunge_stage_multiplier, float(maxi(stage - 1, 0)))
+	var speed_for_stage := _lunge_speed_for(technique) * stage_scale
 	velocity.x = forward.x * speed_for_stage
 	velocity.z = forward.z * speed_for_stage
+
+
+func _lunge_speed_for(technique: StringName) -> float:
+	match technique:
+		ComboTree.TECHNIQUE_JAB:
+			return jab_lunge_speed
+		ComboTree.TECHNIQUE_STRAIGHT:
+			return straight_lunge_speed
+		ComboTree.TECHNIQUE_HOOK:
+			return hook_lunge_speed
+		ComboTree.TECHNIQUE_KNEE:
+			return knee_lunge_speed
+		ComboTree.TECHNIQUE_MIDDLE:
+			return middle_lunge_speed
+		ComboTree.TECHNIQUE_HIGH:
+			return high_lunge_speed
+	return 0.0
 
 
 func _physics_process(delta: float) -> void:

@@ -38,7 +38,7 @@ func _test_accidental_finish_regression() -> void:
 	_accidental_downed_landed = 0
 	var player := _spawn_test_player()
 	# 実機事故と同じく、遺体を正面至近、生存犯人を近接が届くやや横へ置く。
-	player.set("lunge_speeds", Vector3.ZERO)
+	_disable_player_lunge(player)
 	var downed_robber := _spawn_robber(CLOSE_TARGET_POSITION)
 	var live_robber := _spawn_robber(ACCIDENT_LIVE_POSITION)
 	await _wait_frames(SETTLE_FRAMES)
@@ -157,7 +157,7 @@ func _test_combo_auto_release() -> void:
 	_combo_landed = 0
 	var player := _spawn_test_player()
 	# 段ごとの踏み込みを止め、3段とも同じ相手への重なりを実測する。
-	player.set("lunge_speeds", Vector3.ZERO)
+	_disable_player_lunge(player)
 	var robber := _spawn_robber(CLOSE_TARGET_POSITION)
 	await _wait_frames(SETTLE_FRAMES)
 	var detector := _lock_on(player)
@@ -226,6 +226,15 @@ func _spawn_test_player() -> Node3D:
 	player.set_physics_process(false)
 	_prepare_melee_facing(player)
 	return player
+
+
+func _disable_player_lunge(player: Node3D) -> void:
+	player.set("jab_lunge_speed", 0.0)
+	player.set("straight_lunge_speed", 0.0)
+	player.set("hook_lunge_speed", 0.0)
+	player.set("knee_lunge_speed", 0.0)
+	player.set("middle_lunge_speed", 0.0)
+	player.set("high_lunge_speed", 0.0)
 
 
 func _spawn_robber(position: Vector3) -> Node3D:

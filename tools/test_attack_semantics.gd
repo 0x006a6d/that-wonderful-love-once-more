@@ -1,6 +1,6 @@
 extends Node
 
-## 攻撃入力セマンティクスの検証 (シーンハーネス、パンチ/キック 各3段仕様)。
+## 攻撃入力セマンティクスの検証 (シーンハーネス、コンボ木仕様)。
 ## 実行: godot --path . --headless res://tools/test_attack_semantics.tscn
 ##
 ## 実イベント (Input.parse_input_event、パンチ=J / キック=K) で駆動し、
@@ -12,7 +12,7 @@ extends Node
 ##   (5) 3回押し+4回目    → melee_3 まで連鎖、有効化ちょうど 3 回 (4回目は無視)
 ##   (6) キック単発       → kick_1 のみ、有効化 1 回、locomotion 復帰
 ##   (7) キック3連+4回目  → kick_3 まで連鎖、有効化ちょうど 3 回
-##   (8) 相互排他         → パンチ中のキック入力・キック中のパンチ入力は無視
+##   (8) 混合入力         → P K は右膝、K P は左フックへ木どおり分岐
 ## 窓内押下はタイミング固定ではなく再生割合 (ratio 0.5-0.7) を監視して送る。
 
 const PLAYER := "res://actors/player/player.tscn"
@@ -44,7 +44,7 @@ var _case_step: int = 0
 
 
 func _ready() -> void:
-	print("=== 攻撃入力セマンティクス 検証開始 (3段仕様) ===")
+	print("=== 攻撃入力セマンティクス 検証開始 (コンボ木仕様) ===")
 	_player = (load(PLAYER) as PackedScene).instantiate() as Node3D
 	add_child(_player)
 	_melee = _player.get_node("PlayerMelee")
@@ -294,7 +294,7 @@ func _run_case_7(local: int) -> void:
 		_phase = 8
 
 
-## (8) 相互排他: パンチ中のキック入力は無視、キック中のパンチ入力は無視。
+## (8) 混合入力: P K は右膝、K P は左フックへ分岐する。
 func _run_case_8(local: int) -> void:
 	if _case_step == 0:
 		_tap()  # パンチ開始
@@ -302,12 +302,11 @@ func _run_case_8(local: int) -> void:
 	elif _case_step == 1:
 		var r := _ratio("melee_1")
 		if r >= 0.3 and r <= 0.7:
-			_tap_kick()  # パンチ中のキック → 無視されるはず
+			_tap_kick()  # P K → 右膝
 			_case_step = 2
 	elif _case_step == 2 and local >= 120:
-		_assert("(8a) パンチ中のキック入力: キック系に入らない (kick=%s)" % str(_kick_any_seen),
-			not _kick_any_seen)
-		_assert("(8a) パンチ中のキック入力: 有効化 1 回のみ (実測 %d)" % _acts, _acts == 1)
+		_assert("(8a) P K: 右膝へ分岐する (kick=%s)" % str(_kick_any_seen), _kick_any_seen)
+		_assert("(8a) P K: hitbox 有効化 2 回 (実測 %d)" % _acts, _acts == 2)
 		# 後半: キック中のパンチ入力。
 		_reset_counters()
 		_tap_kick()
@@ -315,13 +314,12 @@ func _run_case_8(local: int) -> void:
 	elif _case_step == 3:
 		var r2 := _ratio("kick_1")
 		if r2 >= 0.3 and r2 <= 0.7:
-			_tap()  # キック中のパンチ → 無視されるはず
+			_tap()  # K P → 左フック
 			_case_step = 4
 	elif _case_step == 4 and local >= 260:
 		var back := str(_melee.get("_state")) == "locomotion"
-		_assert("(8b) キック中のパンチ入力: パンチ系に入らない (melee=%s)" % str(_melee_any_seen),
-			not _melee_any_seen)
-		_assert("(8b) キック中のパンチ入力: 有効化 1 回のみ (実測 %d)" % _acts, _acts == 1)
+		_assert("(8b) K P: 左フックへ分岐する (hook=%s)" % str(_melee3_seen), _melee3_seen)
+		_assert("(8b) K P: hitbox 有効化 2 回 (実測 %d)" % _acts, _acts == 2)
 		_assert("(8b) locomotion 復帰", back)
 		_phase = 9
 
