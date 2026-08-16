@@ -51,7 +51,12 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 ## 時間で進むため、この遅れがそのまま「警察が近づく」代償になる。
 @export var down_duration: float = 3.0
 ## ダウン用クリップの倒れ込みを終えるまでの所要秒数。
-@export var down_fall_time: float = 0.35
+## クリップ本来の長さは 2.567 秒で、この値に合わせて再生速度をスケールする。
+## 0.35 はモデルを傾けるだけの暫定表現だった頃の値で、クリップを当てた際に
+## 7.3 倍速となり何が起きたか読めなかったため 1.6 (1.6 倍速) に変更した。
+## 倒れ込みは down_duration と並行して進むため、ここを伸ばしても復帰までの
+## 合計時間は変わらない。
+@export var down_fall_time: float = 1.6
 ## 立ち上がりの所要秒数。この間もまだ入力は受け付けない。
 @export var stand_up_time: float = 0.45
 @export_group("")
