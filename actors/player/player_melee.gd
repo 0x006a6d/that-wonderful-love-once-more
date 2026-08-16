@@ -1,11 +1,12 @@
 extends Node
 
 ## プレイヤーのアニメーション制御。
-## locomotion(idle/walk/run ブレンド)、dance、入力列で分岐する近接コンボ木を駆動する。
+## locomotion(idle/walk/run ブレンド)、dance、down/stand_up、入力列で分岐する近接コンボ木を駆動する。
 ##
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
 ## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
 ## - dance: FBX から読むループクリップ。locomotion とだけ相互遷移する
+## - down/stand_up: 同じ非ループ FBX を正再生／逆再生し、所要時間へ速度同期する
 ## - melee_1..3: 生成済み .res（単発クリップ + Call Method Track 付き）
 ##
 ## 入力の流れ（1 押し 1 発）:
@@ -28,10 +29,9 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 @export var model_path: NodePath = ^"../Model"
 
 @export_group("Locomotion Clips")
-## 待機クリップ。Quaternius universal は glTF インポータが "_Loop" を剥がすため
-## 実アニメ名は "Idle"。
-@export_file("*.gltf", "*.fbx") var idle_scene: String = "res://assets/motions/universal_animation_library.gltf"
-@export var idle_key: String = "Idle"
+## 待機クリップ（Mixamo Idle）。
+@export_file("*.gltf", "*.fbx") var idle_scene: String = "res://assets/motions/mixamo_idle.fbx"
+@export var idle_key: String = "mixamo_com"
 ## 歩行クリップ（Mixamo In Place。逸脱時は mixamo_walk_female / mixamo_walk_catwalk
 ## に差し替え候補あり。パスとキーを変えるだけで試せる）。
 @export_file("*.gltf", "*.fbx") var walk_scene: String = "res://assets/motions/mixamo_walk.fbx"
@@ -46,6 +46,11 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 @export var dance_key: String = "mixamo_com"
 ## locomotion と dance 間のクロスフェード秒数。
 @export var dance_transition_xfade: float = 0.15
+
+@export_group("Down Clip")
+## ダウン素材。同じクリップを倒れ込みでは正再生、立ち上がりでは逆再生する。
+@export_file("*.gltf", "*.fbx") var down_scene: String = "res://assets/motions/mixamo_death_backward_01.fbx"
+@export var down_key: String = "mixamo_com"
 
 @export_group("Locomotion Sync")
 ## locomotion ブレンドの基準速度（この速度で blend=1.0=走り）。
@@ -89,11 +94,15 @@ signal combo_started()
 signal combo_finished()
 signal dance_started()
 signal dance_finished()
+signal down_animation_started()
+signal stand_up_animation_started()
+signal down_animation_finished()
 
 var _anim_player: AnimationPlayer = null
 var _tree: AnimationTree = null
 var _state_machine: AnimationNodeStateMachinePlayback = null
 var _model: Node3D = null
+var _down_clip_length: float = 0.0
 
 var _state: String = "locomotion"
 var _combo_node: StringName = &""
@@ -134,7 +143,8 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if _state_machine == null:
 		return
-	if _state == "locomotion" or _state == "dance":
+	if _state == "locomotion" or _state == "dance" or _state == "down" \
+			or _state == "stand_up":
 		return
 	# クリップ終端の検出は再生位置で行う（自動遷移に任せず、入力列の分岐をコードで握る）。
 	var technique := ComboTree.technique_for(_combo_node)
@@ -313,14 +323,60 @@ func is_dancing() -> bool:
 	return _state == "dance"
 
 
+## プレイヤーのダウン開始。現在の行動を破棄し、非ループクリップを正再生する。
+func start_down(fall_time: float) -> void:
+	if _state_machine == null:
+		return
+	var was_attacking: bool = _combo_node != &""
+	var was_dancing: bool = _state == "dance"
+	_reset_combo_state()
+	if was_attacking:
+		combo_finished.emit()
+	if was_dancing:
+		dance_finished.emit()
+	_state = "down"
+	_tree.set("parameters/down/speed/scale", _duration_scale(fall_time))
+	_state_machine.travel("down")
+	down_animation_started.emit()
+
+
+## 倒れた姿勢から同じクリップを逆再生する。
+func start_stand_up(stand_time: float) -> void:
+	if _state_machine == null or _state != "down":
+		return
+	_state = "stand_up"
+	_tree.set("parameters/stand_up/speed/scale", _duration_scale(stand_time))
+	_state_machine.travel("stand_up")
+	stand_up_animation_started.emit()
+
+
+## 立ち上がり完了後に locomotion へ戻す。
+func finish_down() -> void:
+	if _state_machine == null:
+		return
+	_state = "locomotion"
+	_state_machine.travel("locomotion")
+	down_animation_finished.emit()
+
+
+func _duration_scale(duration: float) -> float:
+	if duration <= 0.0 or _down_clip_length <= 0.0:
+		return 1.0
+	return _down_clip_length / duration
+
+
 func _finish_combo() -> void:
 	_state = "locomotion"
+	_reset_combo_state()
+	_state_machine.travel("locomotion")
+	combo_finished.emit()
+
+
+func _reset_combo_state() -> void:
 	_combo_node = &""
 	_combo_stage = 0
 	_queued_inputs.clear()
 	_queue_closed = false
-	_state_machine.travel("locomotion")
-	combo_finished.emit()
 
 
 func _build_library() -> bool:
@@ -355,6 +411,14 @@ func _build_library() -> bool:
 		return false
 	dance.loop_mode = Animation.LOOP_LINEAR
 	lib.add_animation("dance", dance)
+
+	var down := _extract(down_scene, down_key)
+	if down == null:
+		push_warning("player_melee: down (%s) load failed" % down_key)
+		return false
+	down.loop_mode = Animation.LOOP_NONE
+	_down_clip_length = down.length
+	lib.add_animation("down", down)
 
 	var m1 := load(MELEE_1_RES) as Animation
 	var m2 := load(MELEE_2_RES) as Animation
@@ -443,6 +507,23 @@ func _build_tree() -> void:
 	n_k3.animation = "player/kick_3"
 	var n_dance := AnimationNodeAnimation.new()
 	n_dance.animation = "player/dance"
+	var n_down := AnimationNodeAnimation.new()
+	n_down.animation = "player/down"
+	var n_stand_up := AnimationNodeAnimation.new()
+	n_stand_up.animation = "player/down"
+	n_stand_up.play_mode = AnimationNodeAnimation.PLAY_MODE_BACKWARD
+
+	var down_tree := AnimationNodeBlendTree.new()
+	down_tree.add_node("clip", n_down, Vector2(0, 0))
+	down_tree.add_node("speed", AnimationNodeTimeScale.new(), Vector2(250, 0))
+	down_tree.connect_node("speed", 0, "clip")
+	down_tree.connect_node("output", 0, "speed")
+
+	var stand_up_tree := AnimationNodeBlendTree.new()
+	stand_up_tree.add_node("clip", n_stand_up, Vector2(0, 0))
+	stand_up_tree.add_node("speed", AnimationNodeTimeScale.new(), Vector2(250, 0))
+	stand_up_tree.connect_node("speed", 0, "clip")
+	stand_up_tree.connect_node("output", 0, "speed")
 
 	sm.add_node("locomotion", loco, Vector2(0, 0))
 	sm.add_node("melee_1", n_m1, Vector2(300, 0))
@@ -452,6 +533,8 @@ func _build_tree() -> void:
 	sm.add_node("kick_2", n_k2, Vector2(600, 150))
 	sm.add_node("kick_3", n_k3, Vector2(900, 150))
 	sm.add_node("dance", n_dance, Vector2(0, -180))
+	sm.add_node("down", down_tree, Vector2(300, -180))
+	sm.add_node("stand_up", stand_up_tree, Vector2(600, -180))
 
 	# 全遷移をコード駆動（即時）にする。技間の辺はコンボ木から導出し、
 	# ルートを変更したとき AnimationTree 側に遷移を追記しなくてよいようにする。
@@ -474,6 +557,12 @@ func _build_tree() -> void:
 			combo_exit_xfade, transition_keys)
 	_add_transition_once(sm, &"locomotion", &"dance", dance_transition_xfade, transition_keys)
 	_add_transition_once(sm, &"dance", &"locomotion", dance_transition_xfade, transition_keys)
+	# ダウンはどの行動中にも割り込み、同一クリップの逆再生後に待機へ戻る。
+	for state_name: StringName in [&"locomotion", &"dance", &"melee_1", &"melee_2", &"melee_3",
+			&"kick_1", &"kick_2", &"kick_3"]:
+		_add_transition_once(sm, state_name, &"down", 0.0, transition_keys)
+	_add_transition_once(sm, &"down", &"stand_up", 0.0, transition_keys)
+	_add_transition_once(sm, &"stand_up", &"locomotion", 0.0, transition_keys)
 
 	_tree = AnimationTree.new()
 	_tree.name = "AnimationTree"

@@ -2,7 +2,7 @@
 
 外部から取得したアセットの出典とライセンスを記録する。
 
-## モーション: Universal Animation Library (Quaternius)
+## モーション: Universal Animation Library (Quaternius、QC・計測ツール専用)
 
 - ファイル: `assets/motions/universal_animation_library.gltf` (+ `.bin`)
 - 作者: Quaternius (https://quaternius.com)
@@ -14,7 +14,8 @@
   - README にも "This pack is licensed under CC0 1.0. Full details in LICENSE" と明記。
   - Quaternius 公式ページ (https://quaternius.com/packs/universalanimationlibrary.html) でも "Free to use in personal, educational and commercial projects" / CC0 と表記。
 - 取得日: 2026-08-13
-- 内容: 46 アニメーションを含む単一 glTF。攻撃系として `Punch_Jab` / `Punch_Cross` / `Punch_Enter` / `Sword_Attack` を含む。
+- 内容: 46 アニメーションを含む単一 glTF。現在は実行時には使用せず、QC・計測ツール専用。
+- 参照ツール: `measure_punch.gd` / `measure_stride.gd` / `inspect_motion.gd` / `verify_retarget.gd` / `measure_combo_window.gd` / `probe_univ_names.gd` / `generate_bone_map.gd`
 - 検証で使用した攻撃モーション: `Punch_Cross` (クロスパンチ)。
 - スケルトン命名: Blender Rigify の DEF- 命名 (例 `DEF-hips`, `DEF-spine.001`, `DEF-upper_arm.L`)。
   SkeletonProfileHumanoid へのリターゲットには BoneMap によるエイリアス解決が必要。
@@ -23,20 +24,20 @@
 
 - 出典: Mixamo (https://www.mixamo.com、Adobe 提供)
 - ライセンス: Adobe General Terms of Use に基づく。自分の制作物への組み込み利用は可（ゲーム・映像等）。一方で、モーションを Mixamo 由来のスタンドアロンなアセットとして単体再配布（素材ファイルそのものの配布・転売）することは不可。このため `assets/motions/mixamo_*.fbx` はリポジトリに含めていない
-- 取得日: 2026-08-13（Head Spinning のみ 2026-08-16）
+- 取得日: 2026-08-13（Head Spinning / Idle は 2026-08-16）
 - 形式: 各 FBX に 1 アニメ（Godot の ufbx が sanitize して `mixamo_com` 名になる）
 
-### 実行時に必要（3本）
+### 実行時に必要（5本）
 
-ゲームを動かすだけならこの3本でよい。攻撃モーションは `actors/player/anim/*.res` にベイク済みで、リポジトリに含まれている。
+ゲームを動かすだけならこの5本でよい。攻撃モーションは `actors/player/anim/*.res` にベイク済みで、リポジトリに含まれている。
 
 | Mixamo 検索名 | 配置ファイル名 | 用途 |
 | --- | --- | --- |
 | Walking | `mixamo_walk.fbx` | 歩行 |
 | Running | `mixamo_run.fbx` | 走行 |
+| Idle | `mixamo_idle.fbx` | 待機（2.200s / 53 トラック） |
 | Head Spinning | `mixamo_dance_headspin.fbx` | `interact` 長押し中の回復ダンス（0.833s / 53 トラック） |
-
-待機モーションは Quaternius の glTF（上記）を使うため、Mixamo 側には無い。
+| Standing Death Backward 01 | `mixamo_death_backward_01.fbx` | プレイヤーのダウン表現。倒れ込みを正再生し、立ち上がりを逆再生（2.567s / 54 トラック） |
 
 ### 攻撃クリップを再ベイクする場合に必要（6本）
 
@@ -55,7 +56,7 @@ Hook は Mixamo 上で同名の複数バリエーションがあり、ダウン�
 
 ### ダウンロード時の設定
 
-Head Spinning 以外は **FBX for Unity / Without Skin**、Head Spinning だけ **FBX for Unity / With Skin**（取得ファイル `Ch45_nonPBR@Head Spinning.fbx`）。Godot 4.7.1 でのインポート結果は `Skeleton3D` + `AnimationPlayer` のみで、`MeshInstance3D` は入っていない。
+Idle と Head Spinning 以外は **FBX for Unity / Without Skin**。Head Spinning の取得ファイルは `Ch45_nonPBR@Head Spinning.fbx`、Idle は `Ch45_nonPBR@Idle.fbx`。Godot 4.7.1 でのインポート結果はいずれも `Skeleton3D` + `AnimationPlayer` のみで、`MeshInstance3D` は入っていない。
 
 ### スケルトン命名と BoneMap
 
@@ -63,8 +64,8 @@ Mixamo 元来の命名は `mixamorig:Hips` だが、Godot 4.7 の ufbx インポ
 
 | 命名 | 対象 | BoneMap |
 | --- | --- | --- |
-| `mixamorig4_*` | Head Spinning 以外 | `assets/motions/mixamo_bone_map.tres` |
-| `mixamorig1_*` | Head Spinning | `assets/motions/mixamo_bone_map_rig1.tres` |
+| `mixamorig4_*` | Walking / Running / Standing Death Backward 01 ほか | `assets/motions/mixamo_bone_map.tres` |
+| `mixamorig1_*` | Head Spinning / Idle | `assets/motions/mixamo_bone_map_rig1.tres` |
 
 接頭辞が一致しない BoneMap を流用するとリターゲットが通らず、ボーン名が `mixamorig1_*` のまま残る。新しい素材を足す際は `tools/generate_mixamo_bone_map.gd --prefix=<接頭辞> --output=<保存先>` で BoneMap を生成する。
 

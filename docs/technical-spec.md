@@ -96,7 +96,13 @@ enum Ending { IDEAL, NORMAL, DRIFT, FAILURE }
 
 - **トゥーンシェーダーを自作しない。** `godot-vrm` が MToon シェーダーを同梱しており、インポート時に自動適用される。`shaders/toon_character.gdshader` は作らない
 - **アニメーションはリターゲットを使う。** VRMはHumanoidボーン構造のため、インポート設定で `SkeletonProfileHumanoid` を指定すれば既製のヒューマノイドモーションを流用できる。格闘モーションを一から作らない
-- **Mixamo の BoneMap は sanitize 後の接頭辞ごとに持つ。** Mixamo の元ボーン名が同じでも、Godot ufbx がコロンを置換した後の接頭辞はダウンロードごとに `mixamorig4_` / `mixamorig1_` のように変わりうる。BoneMap のソース名はこの接頭辞まで一致する必要があるため、既存モーション用 `mixamo_bone_map.tres`（`mixamorig4_*`）と Head Spinning 用 `mixamo_bone_map_rig1.tres`（`mixamorig1_*`）を分け、取り違えない。`tools/generate_mixamo_bone_map.gd` は引数なしなら従来版を生成し、`--prefix mixamorig1_ --output res://assets/motions/mixamo_bone_map_rig1.tres` で専用版を生成する
+- **Mixamo の BoneMap は sanitize 後の接頭辞ごとに持つ。** Mixamo の元ボーン名が同じでも、Godot ufbx がコロンを置換した後の接頭辞はダウンロードごとに `mixamorig4_` / `mixamorig1_` のように変わりうる。BoneMap のソース名はこの接頭辞まで一致する必要があるため、次の対応を取り違えない。`tools/generate_mixamo_bone_map.gd` は引数なしなら従来版を生成し、`--prefix mixamorig1_ --output res://assets/motions/mixamo_bone_map_rig1.tres` で専用版を生成する
+
+|素材|sanitize 後の接頭辞|BoneMap|
+|---|---|---|
+|Walking / Running / Standing Death Backward 01|`mixamorig4_*`|`assets/motions/mixamo_bone_map.tres`|
+|Head Spinning / Idle|`mixamorig1_*`|`assets/motions/mixamo_bone_map_rig1.tres`|
+
 - **SpringBone をそのまま残す。** 髪と衣装の揺れは `VRMSpringBone` として自動で入る。手を加えない
 - **ラグドールは全ボーンに作らない。** VRMはボーン数が多く、SpringBone も含まれるため、`Skeleton3D` 全体に Physical Skeleton を生成すると破綻する。`PhysicalBoneSimulator3D` には以下の主要ボーンのみを対象にする
     - `hips` / `spine` / `chest` / `head`
@@ -364,6 +370,11 @@ enum PlayerState {
 2. カメラのオフセットとFOV
 3. `move_speed` と回避可否
 
+通常の移動は `AnimationTree` の `locomotion`（BlendSpace1D）で、blend=0.0 / 0.5 / 1.0 に
+Idle / Walking / Running を置く。待機は `mixamo_idle.fbx` の `mixamo_com`（2.200s / 53
+トラック）をループ再生する。Walking / Running と同じ Humanoid ボーン名へリターゲット済みで、
+従来どおり速度に応じて3クリップをブレンドする。
+
 ### 6.2.1 コンボ木
 
 `P` は `attack`（□ / J）、`K` は `kick`（× / K）。近接は次の木だけを持つ。
@@ -510,7 +521,8 @@ func _disable_hitbox() -> void:
 - HP が尽きたら倒れ、`down_duration` 秒後に自力で立ち上がる（`player_downed` → `player_recovered`）。**ゲームオーバーは作らない。失うのは時間だけ**
     - 倒れている間は `Health` がダメージを弾くため無敵。HP の全快は立ち上がり「完了時」に行う。立ち上がり中に全快させると、無敵が切れているのに入力が戻っていない一方的な被弾窓（`stand_up_time` 秒）ができる
     - `down_duration` / `stand_up_time` に 0 を設定してもタイマー分岐から抜けられるようにしておく（抜け道が無いと、値の設定だけで「倒れたまま操作不能」が再発する）
-    - 倒れ込み・立ち上がりはモデルの傾きで表現する。ダウン用クリップを `AnimationTree` に繋ぐまでの暫定
+    - 倒れ込みは `AnimationTree` の `down` で Standing Death Backward 01 を非ループ再生し、終端姿勢を保持する。立ち上がりは同じクリップの逆再生とし、倒れた姿勢へ確実に繋げる
+    - クリップ本来の長さではゲームプレイ時間を変えない。再生速度をスケールし、倒れ込みは `down_fall_time`、立ち上がりは `stand_up_time` で完了させる。暫定の `down_fall_angle_deg` は廃止する
     - 倒れた時点で `MeleeHitbox` を閉じ、Call Method Track からの再有効化も弾く（クリップはダウン後も最後まで進むため、寝たまま殴れてしまう）
 
 ## 7. NPC共通

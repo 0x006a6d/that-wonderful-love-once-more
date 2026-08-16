@@ -100,6 +100,9 @@ func _init() -> void:
 		if skel != null:
 			for i in range(skel.get_bone_count()):
 				bones.append(skel.get_bone_name(i))
+		var bone_preview: PackedStringArray = PackedStringArray()
+		for i: int in range(mini(bones.size(), 8)):
+			bone_preview.append(bones[i])
 
 		# BoneMap 適用済み (GeneralSkeleton) の場合は基準と一致しないのが正常なので
 		# スケルトン名で分岐して判定する。
@@ -123,7 +126,8 @@ func _init() -> void:
 				parts.append("'" + a + "' len=" + ("%.3f" % anim.length) + "s tracks=" + str(anim.get_track_count()))
 			anim_desc = ", ".join(parts)
 
-		print(fname, " | mesh=", _has_mesh(inst), " | ", status, " | ", anim_desc)
+		print(fname, " | mesh=", _has_mesh(inst), " | ", status,
+			" | first_bones=", bone_preview, " | ", anim_desc)
 		inst.free()
 
 	print("\n=== mismatch summary: ", mismatches.size(), " ===")

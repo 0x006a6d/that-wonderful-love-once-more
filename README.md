@@ -67,7 +67,7 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 
 2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で検索してダウンロードし、`docs/asset-credits.md` の対応表のファイル名にリネームして `assets/motions/` へ配置する。
 
-   遊ぶだけなら **3本**（Walking / Running / Head Spinning）でよい。攻撃モーションは `actors/player/anim/*.res` にベイク済みでリポジトリに含まれているため、元の FBX は不要。`.res` を作り直す場合のみ、追加で6本が要る。検索名・ダウンロード設定・BoneMap の対応は同ドキュメントを参照。
+   遊ぶだけなら **5本**（Walking / Running / Idle / Head Spinning / Standing Death Backward 01）でよい。攻撃モーションは `actors/player/anim/*.res` にベイク済みでリポジトリに含まれているため、元の FBX は不要。`.res` を作り直す場合のみ、追加で6本が要る。検索名・ダウンロード設定・BoneMap の対応は同ドキュメントを参照。
 
 3. Godot 4.7.1 でプロジェクトを開く。初回起動時に FBX / VRM がインポートされる。
 

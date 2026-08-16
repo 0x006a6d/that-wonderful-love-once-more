@@ -50,9 +50,7 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 ## ダウン中の take_hit を弾く）で、失うのは時間だけ。ENGAGEMENT → BREACH が
 ## 時間で進むため、この遅れがそのまま「警察が近づく」代償になる。
 @export var down_duration: float = 3.0
-## 倒れ込みの角度（度）と所要秒数。ダウン用クリップを繋ぐまでの暫定表現で、
-## ダミー・犯人と同じくモデルを傾けるだけ。
-@export var down_fall_angle_deg: float = 80.0
+## ダウン用クリップの倒れ込みを終えるまでの所要秒数。
 @export var down_fall_time: float = 0.35
 ## 立ち上がりの所要秒数。この間もまだ入力は受け付けない。
 @export var stand_up_time: float = 0.45
@@ -98,10 +96,6 @@ var _downed: bool = false
 var _down_timer: float = 0.0
 ## 立ち上がり動作の残り秒数。0 になったら操作が戻る。
 var _stand_up_timer: float = 0.0
-## 倒れ・立ち上がりの傾き用 Tween（多重発行を防ぐため保持する）。
-var _down_tween: Tween = null
-
-
 func _ready() -> void:
 	_camera_rig = get_node_or_null(camera_path) as Node3D
 	_model = get_node_or_null(model_path) as Node3D
@@ -346,7 +340,8 @@ func _on_health_downed(_lethal: bool) -> void:
 	# 攻撃中に倒れた場合、開いたままの判定を閉じる。
 	if _hitbox != null:
 		_hitbox.deactivate_deferred()
-	_tilt_model(down_fall_angle_deg, down_fall_time, Tween.EASE_IN)
+	if _melee != null and _melee.has_method("start_down"):
+		_melee.call("start_down", down_fall_time)
 	player_downed.emit()
 
 
@@ -373,7 +368,8 @@ func _update_down(delta: float) -> void:
 
 func _start_stand_up() -> void:
 	_stand_up_timer = stand_up_time
-	_tilt_model(0.0, stand_up_time, Tween.EASE_OUT)
+	if _melee != null and _melee.has_method("start_stand_up"):
+		_melee.call("start_stand_up", stand_up_time)
 
 
 ## 立ち上がり完了。HP の全快はここで行う。立ち上がり中に全快させると
@@ -383,25 +379,10 @@ func _finish_recovery() -> void:
 	if _health != null:
 		_health.revive()
 	_stand_up_timer = 0.0
-	_tilt_model(0.0, 0.0, Tween.EASE_OUT)
+	if _melee != null and _melee.has_method("finish_down"):
+		_melee.call("finish_down")
 	_downed = false
 	player_recovered.emit()
-
-
-## モデルを前傾させる／戻す。ダウン用クリップを繋ぐまでの暫定表現。
-func _tilt_model(angle_deg: float, duration: float, ease_type: Tween.EaseType) -> void:
-	if _model == null:
-		return
-	if _down_tween != null and _down_tween.is_valid():
-		_down_tween.kill()
-	if duration <= 0.0:
-		# 補間時間が 0（インスペクタで 0 を指定した場合）は即座に反映する。
-		# 長さ 0 の Tween は張らない。
-		_model.rotation.x = deg_to_rad(angle_deg)
-		return
-	_down_tween = create_tween()
-	_down_tween.tween_property(_model, "rotation:x", deg_to_rad(angle_deg), duration) \
-		.set_trans(Tween.TRANS_QUAD).set_ease(ease_type)
 
 
 func is_downed() -> bool:

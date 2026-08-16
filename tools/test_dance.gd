@@ -20,6 +20,7 @@ const STATE_WAIT_FRAMES: int = 60
 const HURT_LOCK_WAIT_FRAMES: int = 30
 const STOP_TEST_DAMAGE: float = 5.0
 const DANCE_ANIMATION: StringName = &"player/dance"
+const IDLE_ANIMATION: StringName = &"player/idle"
 
 var _pass: int = 0
 var _fail: int = 0
@@ -31,6 +32,8 @@ var _melee: Node = null
 var _health: Health = null
 var _hurtbox: Hurtbox = null
 var _skeleton: Skeleton3D = null
+var _animation_player: AnimationPlayer = null
+var _tree: AnimationTree = null
 var _playback: AnimationNodeStateMachinePlayback = null
 
 
@@ -46,6 +49,7 @@ func _run() -> void:
 	if not await _setup():
 		_fatal("テスト舞台またはプレイヤーの初期化に失敗")
 		return
+	await _verify_idle_and_locomotion()
 
 	# 回復速度を測れるように HP を先に減らす。Health への直接ダメージなので
 	# 被弾ロックは発生せず、ダンス開始条件だけを独立して検証できる。
@@ -186,19 +190,82 @@ func _setup() -> bool:
 	if _model == null or _melee == null or _health == null or _hurtbox == null:
 		return false
 	_skeleton = _find_skeleton(_model)
-	var tree: AnimationTree = _melee.get_node_or_null(^"AnimationTree") as AnimationTree
-	if _skeleton == null or tree == null:
+	_tree = _melee.get_node_or_null(^"AnimationTree") as AnimationTree
+	if _skeleton == null or _tree == null:
 		return false
-	var animation_player: AnimationPlayer = _find_animation_player(_model)
-	if animation_player == null or not animation_player.has_animation(DANCE_ANIMATION):
+	_animation_player = _find_animation_player(_model)
+	if _animation_player == null or not _animation_player.has_animation(DANCE_ANIMATION) \
+			or not _animation_player.has_animation(IDLE_ANIMATION):
 		return false
-	var dance_animation: Animation = animation_player.get_animation(DANCE_ANIMATION)
+	var idle_animation: Animation = _animation_player.get_animation(IDLE_ANIMATION)
+	print("[clip] name=%s length=%.3fs tracks=%d loop_mode=%d" % [
+		IDLE_ANIMATION, idle_animation.length, idle_animation.get_track_count(),
+		idle_animation.loop_mode
+	])
+	var dance_animation: Animation = _animation_player.get_animation(DANCE_ANIMATION)
 	print("[clip] name=%s length=%.3fs tracks=%d" % [
 		DANCE_ANIMATION, dance_animation.length, dance_animation.get_track_count()
 	])
-	_playback = tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
+	_playback = _tree.get("parameters/playback") as AnimationNodeStateMachinePlayback
 	await _wait_frames(5)
 	return _playback != null
+
+
+func _verify_idle_and_locomotion() -> void:
+	await _wait_frames(POSE_SETTLE_FRAMES)
+	var bone_index: int = _animated_bone_index()
+	var pose_angle_deg: float = 0.0
+	var bone_name: String = "(none)"
+	if bone_index >= 0:
+		bone_name = _skeleton.get_bone_name(bone_index)
+		var pose_before: Quaternion = _skeleton.get_bone_pose_rotation(bone_index)
+		await _wait_frames(POSE_SAMPLE_FRAMES)
+		var pose_after: Quaternion = _skeleton.get_bone_pose_rotation(bone_index)
+		pose_angle_deg = rad_to_deg(pose_before.angle_to(pose_after))
+	var idle_animation: Animation = _animation_player.get_animation(IDLE_ANIMATION)
+	var idle_active: bool = StringName(_playback.get_current_node()) == &"locomotion" \
+		and idle_animation.loop_mode == Animation.LOOP_LINEAR
+	print("[idle_retarget] bone=%s sample_frames=%d angle_delta=%.4fdeg threshold=%.4fdeg" % [
+		bone_name, POSE_SAMPLE_FRAMES, pose_angle_deg, POSE_MIN_ANGLE_DEG
+	])
+	_assert("(12) 待機中に idle クリップがループ再生され VRM ボーンが動く",
+		idle_active and pose_angle_deg >= POSE_MIN_ANGLE_DEG)
+
+	var max_speed: float = float(_melee.get("locomotion_max_speed"))
+	_melee.call("set_locomotion", 0.0)
+	var idle_blend: float = float(_tree.get("parameters/locomotion/blend/blend_position"))
+	_melee.call("set_locomotion", max_speed * 0.5)
+	var walk_blend: float = float(_tree.get("parameters/locomotion/blend/blend_position"))
+	_melee.call("set_locomotion", max_speed)
+	var run_blend: float = float(_tree.get("parameters/locomotion/blend/blend_position"))
+	var blend_clips_valid: bool = _inspect_locomotion_clips()
+	_melee.call("set_locomotion", 0.0)
+	print("[locomotion_blend] idle=%.3f walk=%.3f run=%.3f clips_valid=%s" % [
+		idle_blend, walk_blend, run_blend, str(blend_clips_valid)
+	])
+	_assert("(13) idle / walk / run の BlendSpace1D が従来どおり働く",
+		is_equal_approx(idle_blend, 0.0) and is_equal_approx(walk_blend, 0.5)
+		and is_equal_approx(run_blend, 1.0) and blend_clips_valid)
+
+
+func _inspect_locomotion_clips() -> bool:
+	var state_machine: AnimationNodeStateMachine = _tree.tree_root as AnimationNodeStateMachine
+	if state_machine == null:
+		return false
+	var locomotion: AnimationNodeBlendTree = state_machine.get_node(&"locomotion") \
+		as AnimationNodeBlendTree
+	if locomotion == null:
+		return false
+	var blend: AnimationNodeBlendSpace1D = locomotion.get_node(&"blend") \
+		as AnimationNodeBlendSpace1D
+	if blend == null or blend.get_blend_point_count() != 3:
+		return false
+	var idle_node: AnimationNodeAnimation = blend.get_blend_point_node(0) as AnimationNodeAnimation
+	var walk_node: AnimationNodeAnimation = blend.get_blend_point_node(1) as AnimationNodeAnimation
+	var run_node: AnimationNodeAnimation = blend.get_blend_point_node(2) as AnimationNodeAnimation
+	return idle_node != null and walk_node != null and run_node != null \
+		and idle_node.animation == IDLE_ANIMATION and walk_node.animation == &"player/walk" \
+		and run_node.animation == &"player/jog"
 
 
 func _deliver_hit() -> bool:
