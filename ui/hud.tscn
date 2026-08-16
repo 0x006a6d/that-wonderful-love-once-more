@@ -1,0 +1,68 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://ui/hud.gd" id="1_hud"]
+
+[node name="Hud" type="CanvasLayer"]
+layer = 50
+script = ExtResource("1_hud")
+
+[node name="Screen" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StatusPanel" type="Panel" parent="Screen"]
+offset_left = 24.0
+offset_top = 24.0
+offset_right = 334.0
+offset_bottom = 198.0
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Screen/StatusPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+mouse_filter = 2
+
+[node name="Rows" type="VBoxContainer" parent="Screen/StatusPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 7
+mouse_filter = 2
+
+[node name="HpLabel" type="Label" parent="Screen/StatusPanel/Margin/Rows"]
+layout_mode = 2
+text = "SELF HP   100 / 100"
+
+[node name="HpBar" type="ProgressBar" parent="Screen/StatusPanel/Margin/Rows"]
+custom_minimum_size = Vector2(274, 18)
+layout_mode = 2
+value = 100.0
+show_percentage = false
+
+[node name="RobberLabel" type="Label" parent="Screen/StatusPanel/Margin/Rows"]
+layout_mode = 2
+text = "犯人 残り 0 / 0  制圧 0 / 0"
+
+[node name="CivilianLabel" type="Label" parent="Screen/StatusPanel/Margin/Rows"]
+layout_mode = 2
+text = "客 生存     0 / 0"
+
+[node name="LockMarker" type="Label" parent="Screen"]
+visible = false
+offset_right = 160.0
+offset_bottom = 38.0
+mouse_filter = 2
+text = "[ TARGET ]"
+horizontal_alignment = 1
+vertical_alignment = 1

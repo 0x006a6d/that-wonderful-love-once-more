@@ -330,6 +330,11 @@ Player (CharacterBody3D)
 
 `lock_on`（Tab / R3）は押下ごとのトグル。`target_acquired(target)` / `target_released()` を `player.gd` が購読し、攻撃判定とカメラへ対象を注入する。ロックオンのロジック自体は `player.gd` に置かない。ロックオン中は候補の順位を再評価せず、上位候補が現れても自動では乗り換えない。乗り換えはプレイヤーが解除して押し直したときだけ行う。
 
+HUDは `current_target()` と `current_target_kind() -> int` を問い合わせる。`TargetKind` は
+`NONE` / `LIVE_ROBBER` / `LIVE_CIVILIAN` / `DOWNED_ROBBER` の4値で、具体的なNPC型ではなく
+`robber` / `civilian` グループと `Health.is_downed()` だけから決める。所属不明の生存脅威は候補順位と
+同様に `LIVE_ROBBER` 表示へまとめる。
+
 |`@export`|既定値|用途|
 |---|---:|---|
 |`lock_on_range`|12.0 m|候補検出球の半径|
@@ -338,12 +343,6 @@ Player (CharacterBody3D)
 |`target_aim_height`|0.8 m|角度・遮蔽レイが狙う本体原点からの高さ|
 |`lock_on_release_range`|16.0 m|距離による解除閾値。検出距離より広くしてヒステリシスを持たせる|
 |`lose_target_grace`|0.6 s|連続遮蔽を許容する時間|
-|`show_placeholder_marker`|`true`|暫定3Dマーカーの表示|
-|`marker_color`|`#FFC729`|生存犯人・所属不明の生存対象を示す暫定3Dマーカー色|
-|`marker_civilian_color`|`#FF29B8`|生存客を狙っていることを警告する暫定3Dマーカー色|
-|`marker_finish_color`|`#EB332E`|ダウン犯人への追い打ちを示す暫定3Dマーカー色|
-|`marker_size`|0.12 m|暫定3Dマーカー球の半径|
-|`marker_height`|2.1 m|暫定3Dマーカーの対象原点からの高さ|
 |`player_camera.gd: lock_follow_speed`|6.0|対象方向へヨーを補間する速度|
 
 |自動解除条件|理由・処理|
@@ -500,8 +499,8 @@ func _disable_hitbox() -> void:
 
 `LockOnDetector.finish_lock_range` は既定 `2.0 m`。ダウン済み候補はこの範囲内かつ `robber`
 グループで、対象が `can_receive_finish_hit()` を公開して `true` を返す場合だけ選べる。具体的な
-役割型は参照しない。暫定マーカーは追い打ち対象だけ `marker_finish_color` に変え、プレイヤーが
-意図している行為を明示する。
+役割型は参照しない。`current_target_kind()` は追い打ち対象を `DOWNED_ROBBER` と通知し、HUDが
+生存対象と異なる画面上マーカーを出してプレイヤーの意図を明示する。
 
 `Hurtbox.receive_hit()` はダウン中、`Hitbox.exempt_body` が本体と一致する場合だけ
 `take_finish_hit()` へ振り分ける。追い打ちでは通常ダメージとノックバックを与えない。
@@ -535,6 +534,7 @@ func _disable_hitbox() -> void:
 @export var finish_hits: int = 2
 
 signal staggered()
+signal hp_changed(current: float, maximum: float)
 signal downed(lethal: bool)
 signal finished(attacker: Node3D)
 
@@ -542,6 +542,10 @@ func take_hit(damage: float, lethal: bool = false,
         ignore_stagger_threshold: bool = false) -> void
 func take_finish_hit(attacker: Node3D = null) -> void
 ```
+
+`hp_changed(current, maximum)` はHPが実際に変化した `take_hit()` / `heal()` / `revive()` から送る。
+HUDはこのシグナルを購読し、HPを毎フレーム参照しない。ダンス中の `heal()` も回復した物理フレーム
+ごとに通知するため、数値とバーが連続して増える。
 
 致死判定は攻撃側が持ち、近接は `Hurtbox.receive_hit()` から `Health.take_hit(damage, lethal)`、銃撃は `Hurtbox.receive_shot()` から第3引数も含めて渡す。近接は `lethal = false`、銃撃は `lethal = true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
 
@@ -1012,13 +1016,39 @@ M6 時点ではデバッグ用の文字表示のままでよい。本実装は M
 
 ## 14. HUD
 
-数値メーターを持たない。以下のみ。
+`ui/hud.tscn` + `ui/hud.gd` を `bank_lobby.tscn` の `Hud` として配置する。画面上の情報は
+銀行設備の映像ではなく、すべて「AIニケ自身の状態表示」として扱う。現段階は可読性を優先し、
+監視カメラ風フィルタ、走査線、タイムスタンプ、色相シフトは実装しない。カルマや分岐条件を
+最適化させるメーターも表示しない。
 
-- レティクル（銃モード時。客に照準が合うと色変化）
-- ロックオンマーカー
-- タイムスタンプカード（各幕の頭に数秒間フェード表示）
+表示は次の4項目。
 
-ロックオンマーカーの HUD 実装までは、`lock_on.gd` が対象頭上へ出す unshaded の暫定3Dマーカーで代用する。この表示は8/24の HUD 実装で置き換える。
+1. プレイヤーHP: `72 / 100` 形式の数値と `ProgressBar`
+2. 犯人: 残り人数 / 総数と、制圧数 / 総数を同じ1行に表示
+3. 客: 生存人数 / 総数。スコアではなく現在の危険状況として表示
+4. ロックオン対象: 対象の頭上位置を `Camera3D.unproject_position()` で画面座標へ射影したマーカー
+
+HPは `Health.hp_changed(current, maximum)` を購読して更新し、毎フレーム参照しない。犯人側には
+人数変更シグナルがなく、客側だけシグナル方式にすると同じ表示内に2種類の更新経路ができる。
+そこで人数は `RunState.robbers_downed` / `robbers_total` / `civilians_downed` /
+`civilians_total` のint 4個だけを毎フレーム比較する。軽量で、更新経路を単純に保てるためである。
+
+ロックオンマーカーは `LockOn.current_target_kind()` に応じて、生存犯人 `[ TARGET ]`、生存客
+`! CIVILIAN !`（赤い警告）、ダウン犯人 `[ DOWN ]` の文字と色を変える。従来の対象頭上の3D球は
+削除し、表示の所有者をHUDだけにした。対象がカメラ背後または画面外ならマーカーを隠す。
+画面端へ寄せると背後の対象まで同じ方向指示に見えて攻撃意図を誤認しやすいため、画面内に
+実際に映っている対象だけを示す。`EPILOGUE` でエンディングカードが表示されたらHUD全体を隠す。
+
+`hud.gd` の `@export` 一覧:
+
+|グループ|項目|用途|
+|---|---|---|
+|Connections|`health_path`, `camera_path`, `lock_on_path`|Health・実カメラ・LockOnDetectorの注入|
+|Layout|`status_position`, `status_size`, `hp_bar_size`, `marker_size`, `marker_world_height`|配置・寸法・対象原点からのマーカー高さ|
+|Colors|`panel_color`, `text_color`, `accent_color`, `hp_background_color`, `hp_fill_color`|状態パネルとHPの配色|
+|Colors|`live_robber_color`, `civilian_warning_color`, `downed_robber_color`|対象種別ごとのマーカー色|
+|Typography|`status_font_size`, `hp_font_size`, `marker_font_size`|後の演出調整に備えた文字サイズ|
+|Node Paths|`status_panel_path`, `hp_label_path`, `hp_bar_path`, `robber_label_path`, `civilian_label_path`, `marker_path`|HUDシーン内部ノードの注入|
 
 `ui/ending_card.tscn` + `ui/ending_card.gd` は `GameDirector.act_changed` を購読し、
 `EPILOGUE` で全画面の暗い半透明背景と、分岐名・犯人/客の無力化総数（死亡を含む）・
@@ -1026,17 +1056,6 @@ M6 時点ではデバッグ用の文字表示のままでよい。本実装は M
 表示中は `SceneTree.paused = true`、カード自身は `PROCESS_MODE_ALWAYS` とする。
 `ui_accept`（Enter / Space）で `RunState.reset()` → `GameDirector.reset()` → 現在シーン再読込の順にやり直す。
 現状は縦切り用の文字表示のみで、8/24以降にニュース放送・Aftermath へ発展させる。
-
-アクセントカラーは `RunState.deviation_changed` を購読し、ベース色 `#5A4C97` から色相を赤方向へシフトさせる。
-
-```gdscript
-func _on_deviation_changed(level: float) -> void:
-    var base := Color("#5A4C97")
-    var shifted := base
-    shifted.h = lerpf(base.h, 0.0, level)
-    shifted.s = lerpf(base.s, 0.85, level)
-    accent_color = shifted
-```
 
 ## 15. 入力マップ
 

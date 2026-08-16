@@ -108,14 +108,12 @@ func _test_finish_gates_and_double_record() -> void:
 
 	await _toggle_lock_on()
 	var distance := player.global_position.distance_to(robber.global_position)
-	var marker_material := detector.get("_marker_material") as StandardMaterial3D
-	var finish_marker: bool = marker_material != null \
-		and marker_material.albedo_color.is_equal_approx(detector.marker_finish_color)
-	print("[near finish lock] distance=%.3f m / finish_lock_range=%.3f m / marker=%s" %
-		[distance, detector.finish_lock_range, str(finish_marker)])
+	var finish_kind: bool = detector.current_target_kind() == LockOn.TargetKind.DOWNED_ROBBER
+	print("[near finish lock] distance=%.3f m / finish_lock_range=%.3f m / kind=%d" %
+		[distance, detector.finish_lock_range, detector.current_target_kind()])
 	_assert("finish_lock_range 以内ならダウン犯人を狙い直せる",
 		distance <= detector.finish_lock_range and detector.current_target() == robber)
-	_assert("追い打ち対象は生存対象と異なる marker_finish_color で示される", finish_marker)
+	_assert("追い打ち対象は current_target_kind でダウン犯人と通知される", finish_kind)
 
 	await _strike(hitbox, MELEE_DAMAGE)
 	print("[finish hit] count=1 landed=%d killed=%d" %

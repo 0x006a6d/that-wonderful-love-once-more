@@ -149,11 +149,6 @@ func _camera_angle_deg(camera: Camera3D, target: Node3D) -> float:
 	return rad_to_deg(forward.angle_to(to_target))
 
 
-func _marker_color(detector: LockOn) -> Color:
-	var material := detector.get("_marker_material") as StandardMaterial3D
-	return material.albedo_color if material != null else Color.TRANSPARENT
-
-
 func _assert(label: String, condition: bool) -> void:
 	if condition:
 		_pass += 1

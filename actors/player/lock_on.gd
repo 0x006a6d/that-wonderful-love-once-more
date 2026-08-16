@@ -18,6 +18,14 @@ enum TargetPriority {
 	COUNT,
 }
 
+## HUD へ公開する対象種別。判定は具体的なNPC型ではなくグループと Health だけで行う。
+enum TargetKind {
+	NONE,
+	LIVE_ROBBER,
+	LIVE_CIVILIAN,
+	DOWNED_ROBBER,
+}
+
 ## ロックオン候補を検出する距離（m）。
 @export var lock_on_range: float = 12.0
 ## ダウン済みの追い打ち可能対象を候補に含める距離（m）。
@@ -31,20 +39,6 @@ enum TargetPriority {
 ## 遮蔽がこの秒数だけ連続した場合にロックを解除する。
 @export var lose_target_grace: float = 0.6
 
-@export_group("Placeholder Marker")
-## 8/24 の HUD ロックオンマーカー実装で置き換える暫定 3D 表示。
-@export var show_placeholder_marker: bool = true
-@export var marker_color: Color = Color(1.0, 0.78, 0.16, 1.0)
-## 生存している客を狙っていることを警告する暫定マーカー色。
-@export var marker_civilian_color: Color = Color(1.0, 0.16, 0.72, 1.0)
-## 追い打ち可能対象を明示する暫定マーカー色。
-@export var marker_finish_color: Color = Color(0.92, 0.20, 0.18, 1.0)
-## 暫定マーカー球の半径（m）。
-@export var marker_size: float = 0.12
-## 対象本体の原点からマーカーまでの高さ（m）。
-@export var marker_height: float = 2.1
-@export_group("")
-
 signal target_acquired(target: Node3D)
 signal target_released()
 
@@ -53,8 +47,6 @@ var _owner_body: Node3D = null
 var _target: Node3D = null
 var _target_health: Health = null
 var _occluded_time: float = 0.0
-var _marker: MeshInstance3D = null
-var _marker_material: StandardMaterial3D = null
 
 
 func _ready() -> void:
@@ -63,7 +55,6 @@ func _ready() -> void:
 	monitoring = true
 	monitorable = false
 	_apply_detector_range()
-	_create_placeholder_marker()
 
 
 ## player.gd から注入される、候補選択に使う実カメラ。
@@ -80,6 +71,19 @@ func current_target() -> Node3D:
 	return _target
 
 
+## HUD が見た目を選ぶための公開問い合わせ。対象の具体型には依存しない。
+func current_target_kind() -> int:
+	if _target == null or not is_instance_valid(_target):
+		return TargetKind.NONE
+	if _target_health != null and _target_health.is_downed() \
+			and _target.is_in_group(ROBBER_GROUP):
+		return TargetKind.DOWNED_ROBBER
+	if _target.is_in_group(CIVILIAN_GROUP):
+		return TargetKind.LIVE_CIVILIAN
+	# 所属不明の生存脅威は候補順位と同様、生存犯人と同じ表示にまとめる。
+	return TargetKind.LIVE_ROBBER
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed(&"lock_on"):
 		return
@@ -91,7 +95,6 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_update_marker()
 	if _target == null:
 		return
 	# ロック中は候補を再評価しない。上位候補が現れても入力なしの乗り換えは行わない。
@@ -163,7 +166,6 @@ func _set_target(target: Node3D) -> void:
 	if _target_health != null:
 		_target_health.downed.connect(_on_target_downed)
 	_target.tree_exiting.connect(_on_target_tree_exiting)
-	_update_marker()
 	target_acquired.emit(_target)
 
 
@@ -178,8 +180,6 @@ func _release_target() -> void:
 	_target = null
 	_target_health = null
 	_occluded_time = 0.0
-	if _marker != null:
-		_marker.visible = false
 	target_released.emit()
 
 
@@ -189,7 +189,7 @@ func _on_target_downed(_lethal: bool) -> void:
 
 
 func _on_target_tree_exiting() -> void:
-	# 対象がシーンから除去される前に参照と暫定表示を片付ける。
+	# 対象がシーンから除去される前に参照を片付ける。
 	_release_target()
 
 
@@ -247,37 +247,3 @@ func _apply_detector_range() -> void:
 		sphere.radius = lock_on_range
 		collision_shape.shape = sphere
 		return
-
-
-func _create_placeholder_marker() -> void:
-	_marker = MeshInstance3D.new()
-	_marker.name = "PlaceholderMarker"
-	var sphere := SphereMesh.new()
-	sphere.radius = marker_size
-	sphere.height = marker_size * 2.0
-	_marker.mesh = sphere
-	_marker_material = StandardMaterial3D.new()
-	_marker_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_marker_material.albedo_color = marker_color
-	_marker.material_override = _marker_material
-	_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_marker)
-	_marker.top_level = true
-	_marker.visible = false
-
-
-func _update_marker() -> void:
-	if _marker == null:
-		return
-	var can_show: bool = (show_placeholder_marker and _target != null
-		and is_instance_valid(_target) and _target.is_inside_tree())
-	_marker.visible = can_show
-	if can_show:
-		if _marker_material != null:
-			if _target_health != null and _target_health.is_downed():
-				_marker_material.albedo_color = marker_finish_color
-			elif _target.is_in_group(CIVILIAN_GROUP):
-				_marker_material.albedo_color = marker_civilian_color
-			else:
-				_marker_material.albedo_color = marker_color
-		_marker.global_position = _target.global_position + Vector3.UP * marker_height

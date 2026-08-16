@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://actors/npc/roles/erratic.tscn" id="5_erratic"]
 [ext_resource type="PackedScene" path="res://actors/npc/civilian.tscn" id="6_civilian"]
 [ext_resource type="PackedScene" path="res://ui/ending_card.tscn" id="7_ending"]
+[ext_resource type="PackedScene" path="res://ui/hud.tscn" id="8_hud"]
 
 [sub_resource type="Environment" id="Env_lobby"]
 background_mode = 1
@@ -429,5 +430,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.2, 7)
 
 [node name="Civilian6" parent="." instance=ExtResource("6_civilian")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0.2, 2)
+
+[node name="Hud" parent="." instance=ExtResource("8_hud")]
+health_path = NodePath("../Player/Health")
+camera_path = NodePath("../Player/SpringArm3D/Camera3D")
+lock_on_path = NodePath("../Player/LockOnDetector")
 
 [node name="EndingCard" parent="." instance=ExtResource("7_ending")]

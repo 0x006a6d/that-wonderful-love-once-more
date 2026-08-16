@@ -21,6 +21,8 @@ class_name Health
 @export var finish_hits: int = 2
 ## よろけ（ダウンには至らない被弾）が発生した。
 signal staggered()
+## HP が変化した。HUD などの表示側は毎フレーム参照せず、この通知を購読する。
+signal hp_changed(current: float, maximum: float)
 ## ダウンした。lethal=true なら致死（攻撃側の Hitbox.lethal から渡される）。
 signal downed(lethal: bool)
 ## ダウン後の追い打ちが規定回数に達した。attacker は成立させた加害者。
@@ -45,7 +47,10 @@ func take_hit(damage: float, lethal: bool = false,
 		ignore_stagger_threshold: bool = false) -> void:
 	if _is_downed:
 		return
+	var hp_before := _hp
 	_hp = maxf(_hp - damage, 0.0)
+	if not is_equal_approx(_hp, hp_before):
+		hp_changed.emit(_hp, max_hp)
 	_stagger_count += 1
 
 	var threshold_met: bool = ignore_stagger_threshold or _stagger_count >= stagger_threshold
@@ -80,14 +85,20 @@ func is_downed() -> bool:
 func heal(amount: float) -> void:
 	if _is_downed or amount <= 0.0:
 		return
+	var hp_before := _hp
 	_hp = minf(_hp + amount, max_hp)
+	if not is_equal_approx(_hp, hp_before):
+		hp_changed.emit(_hp, max_hp)
 
 
 ## HP・よろけ回数・追い打ち状態を初期状態へ戻す。
 ## 通常回復だけを行う heal() とは異なり、ダウンからの復帰専用。
 func revive() -> void:
+	var hp_before := _hp
 	_hp = max_hp
 	_stagger_count = 0
 	_is_downed = false
 	_finish_hit_count = 0
 	_finished_emitted = false
+	if not is_equal_approx(_hp, hp_before):
+		hp_changed.emit(_hp, max_hp)

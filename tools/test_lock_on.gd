@@ -21,7 +21,7 @@ func _run() -> void:
 	await _test_downed_robber_fallback()
 	await _test_angle_selection()
 	await _test_no_automatic_priority_switch()
-	await _test_marker_colors()
+	await _test_target_kinds()
 	await _test_wall_filter()
 	await _test_toggle_release()
 	await _test_downed_release()
@@ -179,24 +179,22 @@ func _test_no_automatic_priority_switch() -> void:
 		civilian_was_selected and _lock_on(player).current_target() == civilian)
 
 
-func _test_marker_colors() -> void:
+func _test_target_kinds() -> void:
 	await _new_world()
 	var player := _spawn_player()
-	_spawn_target("MarkerRobber", ROBBER_LAYER, &"robber", Vector3(0.0, 0.0, -6.0))
+	_spawn_target("KindRobber", ROBBER_LAYER, &"robber", Vector3(0.0, 0.0, -6.0))
 	await _wait_frames(SETTLE_FRAMES)
 	await _toggle_lock_on()
 	var detector := _lock_on(player)
-	var robber_color := _marker_color(detector)
-	var expected_robber := detector.marker_color
+	var robber_kind := detector.current_target_kind()
 
 	await _new_world()
 	player = _spawn_player()
-	_spawn_target("MarkerCivilian", CIVILIAN_LAYER, &"civilian", Vector3(0.0, 0.0, -6.0))
+	_spawn_target("KindCivilian", CIVILIAN_LAYER, &"civilian", Vector3(0.0, 0.0, -6.0))
 	await _wait_frames(SETTLE_FRAMES)
 	await _toggle_lock_on()
 	detector = _lock_on(player)
-	var civilian_color := _marker_color(detector)
-	var expected_civilian := detector.marker_civilian_color
+	var civilian_kind := detector.current_target_kind()
 
 	await _new_world()
 	player = _spawn_player()
@@ -207,17 +205,13 @@ func _test_marker_colors() -> void:
 	await _wait_frames(2)
 	await _toggle_lock_on()
 	detector = _lock_on(player)
-	var finish_color := _marker_color(detector)
-	var expected_finish := detector.marker_finish_color
-	print("[marker colors] robber=%s / civilian=%s / finish=%s" %
-		[str(robber_color), str(civilian_color), str(finish_color)])
-	_assert("マーカーは生存犯人・生存客・追い打ち対象を異なる3色で示す",
-		robber_color.is_equal_approx(expected_robber)
-		and civilian_color.is_equal_approx(expected_civilian)
-		and finish_color.is_equal_approx(expected_finish)
-		and not robber_color.is_equal_approx(civilian_color)
-		and not robber_color.is_equal_approx(finish_color)
-		and not civilian_color.is_equal_approx(finish_color))
+	var finish_kind := detector.current_target_kind()
+	print("[target kinds] robber=%d / civilian=%d / finish=%d" %
+		[robber_kind, civilian_kind, finish_kind])
+	_assert("current_target_kind は生存犯人・生存客・追い打ち対象を区別する",
+		robber_kind == LockOn.TargetKind.LIVE_ROBBER
+		and civilian_kind == LockOn.TargetKind.LIVE_CIVILIAN
+		and finish_kind == LockOn.TargetKind.DOWNED_ROBBER)
 
 
 func _test_wall_filter() -> void:
