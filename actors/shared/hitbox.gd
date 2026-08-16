@@ -110,6 +110,10 @@ func _try_hit(area: Area3D) -> void:
 		var blocked: bool = bool(target.call("blocks_hit_from", attacker_position))
 		if blocked:
 			return
+	var landed: bool = hurtbox.receive_hit(self)
+	if not landed:
+		# 成立しなかった追い打ちは盾による防御と同じく命中扱いにしない。
+		# _already_hit にも残さず、同じ判定窓で状況が変われば再評価可能にする。
+		return
 	_already_hit.append(target)
-	hurtbox.receive_hit(self)
 	hit_landed.emit(target)

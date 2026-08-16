@@ -33,7 +33,8 @@ func owner_body() -> Node3D:
 
 
 ## Hitbox から呼ばれる。payload を本体の Health / ノックバックへ伝える。
-func receive_hit(hitbox: Hitbox) -> void:
+## 被弾処理が実際に通った場合だけ true を返す。
+func receive_hit(hitbox: Hitbox) -> bool:
 	var attacker := hitbox.source_body()
 	if _health != null and _health.is_downed():
 		# 追い打ちはロックオン対象本人を exempt_body に指定した攻撃だけ通す。
@@ -43,7 +44,8 @@ func receive_hit(hitbox: Hitbox) -> void:
 			if _owner_body.has_method("flash_hit"):
 				_owner_body.call("flash_hit")
 			_health.take_finish_hit(attacker)
-		return
+			return true
+		return false
 	_notify_attacker(attacker)
 	var dir := _knockback_direction(attacker)
 	if _owner_body != null and _owner_body.has_method("receive_knockback"):
@@ -52,6 +54,7 @@ func receive_hit(hitbox: Hitbox) -> void:
 		_owner_body.call("flash_hit")
 	if _health != null:
 		_health.take_hit(hitbox.damage, hitbox.lethal)
+	return true
 
 
 ## ヒットスキャン銃から呼ばれる。近接と同じ方向計算と被弾フラッシュを使うが、

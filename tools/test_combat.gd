@@ -35,6 +35,7 @@ var _dummy_start_hp: float = 0.0
 var _hp_after_first_hit: float = -1.0
 var _downed_after_first_hit: bool = false
 var _staggered_count: int = 0
+var _living_hit_landed_count: int = 0
 var _max_moved: float = 0.0
 var _reached_melee_2: bool = false
 var _key_attack_ok: bool = false
@@ -66,10 +67,12 @@ func _ready() -> void:
 	_dummy_health = _dummy.get_node_or_null("Health")
 	_dummy2 = _stage.get_node_or_null("Dummy2") as Node3D
 	_dummy2_health = _dummy2.get_node_or_null("Health") if _dummy2 != null else null
-	if _melee == null or _dummy_health == null or _dummy2_health == null:
-		_fatal("PlayerMelee / Health が見つからない")
+	var hitbox := _player.get_node_or_null("Model/MeleeHitbox") as Hitbox
+	if _melee == null or _dummy_health == null or _dummy2_health == null or hitbox == null:
+		_fatal("PlayerMelee / Hitbox / Health が見つからない")
 		return
 	_dummy_health.connect("staggered", _on_staggered)
+	hitbox.hit_landed.connect(_on_hit_landed)
 
 
 func _on_staggered() -> void:
@@ -77,6 +80,11 @@ func _on_staggered() -> void:
 	if _hp_after_first_hit < 0.0:
 		_hp_after_first_hit = float(_dummy_health.call("current_hp"))
 		_downed_after_first_hit = bool(_dummy_health.call("is_downed"))
+
+
+func _on_hit_landed(target: Node3D) -> void:
+	if target == _dummy and not bool(_dummy_health.call("is_downed")):
+		_living_hit_landed_count += 1
 
 
 func _physics_process(_delta: float) -> void:
@@ -170,6 +178,8 @@ func _evaluate() -> void:
 	_assert("attack アクション (キー J) でコンボが発火した", _key_attack_ok)
 	_assert("被弾で HP が減り staggered が発火した",
 		_hp_after_first_hit >= 0.0 and _hp_after_first_hit < _dummy_start_hp and _staggered_count >= 1)
+	_assert("生存している相手への通常命中で hit_landed が発火した",
+		_living_hit_landed_count >= 1)
 	_assert("1発ではダウンしない（初撃後は非ダウン）", not _downed_after_first_hit)
 	_assert("ノックバックでダミーが動いた", _max_moved > 0.05)
 	_assert("コンボが 2 段目まで連鎖した", _reached_melee_2)

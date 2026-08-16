@@ -11,6 +11,8 @@ const COMBO_WAIT_FRAMES: int = 240
 const INPUT_QUEUE_FRAMES: int = 5
 
 var _combo_landed: int = 0
+var _accidental_downed_landed: int = 0
+var _finish_landed: int = 0
 var _civilian_finished: int = 0
 
 
@@ -33,6 +35,7 @@ func _run() -> void:
 func _test_accidental_finish_regression() -> void:
 	await _new_world()
 	_combo_landed = 0
+	_accidental_downed_landed = 0
 	var player := _spawn_test_player()
 	# 実機事故と同じく、遺体を正面至近、生存犯人を近接が届くやや横へ置く。
 	player.set("lunge_speeds", Vector3.ZERO)
@@ -59,7 +62,7 @@ func _test_accidental_finish_regression() -> void:
 	var killed_by_player_before := RunState.robbers_killed_by_player
 	var hitbox := player.get_node(^"Model/MeleeHitbox") as Hitbox
 	var melee := player.get_node(^"PlayerMelee")
-	hitbox.hit_landed.connect(func(_target: Node3D) -> void: _combo_landed += 1)
+	hitbox.hit_landed.connect(_on_accidental_hit_landed.bind(downed_robber))
 	melee.call("attack")
 	await _wait_frames(INPUT_QUEUE_FRAMES)
 	melee.call("attack")
@@ -69,23 +72,28 @@ func _test_accidental_finish_regression() -> void:
 		await get_tree().physics_frame
 		if str(melee.get("_state")) == "locomotion" and live_health.is_downed():
 			break
-	print("[accident combo] selected_live=%s landed=%d killed_by_player=%d -> %d" %
-		[str(selected_live), _combo_landed, killed_by_player_before,
+	print(("[accident combo] selected_live=%s landed=%d downed_landed=%d " \
+		+ "killed_by_player=%d -> %d") %
+		[str(selected_live), _combo_landed, _accidental_downed_landed, killed_by_player_before,
 		RunState.robbers_killed_by_player])
 	_assert("正面至近の遺体がいても生存犯人へロックしコンボで追い打ち事故を起こさない",
 		downed_angle < live_angle and downed_distance < live_distance
-		and selected_live and live_health.is_downed() and _combo_landed >= 3
+		and selected_live and live_health.is_downed() and _combo_landed == 1
 		and RunState.robbers_killed_by_player == killed_by_player_before)
+	_assert("別の相手を対象にした攻撃がダウン済み犯人へ重なっても hit_landed が出ない",
+		_accidental_downed_landed == 0)
 
 
 func _test_finish_gates_and_double_record() -> void:
 	await _new_world()
+	_finish_landed = 0
 	var player := _spawn_test_player()
 	var robber := _spawn_robber(CLOSE_TARGET_POSITION)
 	await _wait_frames(SETTLE_FRAMES)
 	var detector := _lock_on(player)
 	var health := robber.get_node(^"Health") as Health
 	var hitbox := player.get_node(^"Model/MeleeHitbox") as Hitbox
+	hitbox.hit_landed.connect(func(_target: Node3D) -> void: _finish_landed += 1)
 
 	# 生存中のロックはダウン通知で解除され、同じコンボへ攻撃意図を残さない。
 	await _toggle_lock_on()
@@ -93,8 +101,8 @@ func _test_finish_gates_and_double_record() -> void:
 	await _wait_frames(2)
 	var released_on_down: bool = detector.current_target() == null
 	await _strike(hitbox, MELEE_DAMAGE)
-	print("[unlocked finish] released=%s killed=%d" %
-		[str(released_on_down), RunState.robbers_killed])
+	print("[unlocked finish] released=%s landed=%d killed=%d" %
+		[str(released_on_down), _finish_landed, RunState.robbers_killed])
 	_assert("ダウン犯人へロックオンなしで攻撃しても robbers_killed は増えない",
 		released_on_down and RunState.robbers_killed == 0)
 
@@ -110,9 +118,12 @@ func _test_finish_gates_and_double_record() -> void:
 	_assert("追い打ち対象は生存対象と異なる marker_finish_color で示される", finish_marker)
 
 	await _strike(hitbox, MELEE_DAMAGE)
-	print("[finish hit] count=1 killed=%d" % RunState.robbers_killed)
+	print("[finish hit] count=1 landed=%d killed=%d" %
+		[_finish_landed, RunState.robbers_killed])
 	_assert("ロックオンして1回叩いても robbers_killed は増えない",
 		RunState.robbers_killed == 0)
+	_assert("ロックオンし直した正しい追い打ちでは hit_landed が出る",
+		_finish_landed == 1)
 	await _strike(hitbox, MELEE_DAMAGE)
 	print("[finish hit] count=2 killed=%d" % RunState.robbers_killed)
 	_assert("既定 finish_hits の2回目で robbers_killed が1増える",
@@ -169,7 +180,7 @@ func _test_combo_auto_release() -> void:
 	print("[combo down] landed=%d target_released=%s killed=%d" %
 		[_combo_landed, str(detector.current_target() == null), RunState.robbers_killed])
 	_assert("コンボ途中のダウン後に残り段が当たっても追い打ちにならない",
-		health.is_downed() and _combo_landed >= 3
+		health.is_downed() and _combo_landed == 1
 		and detector.current_target() == null and RunState.robbers_killed == 0)
 
 
@@ -224,3 +235,9 @@ func _spawn_robber(position: Vector3) -> Node3D:
 	_actors.add_child(robber)
 	robber.set_physics_process(false)
 	return robber
+
+
+func _on_accidental_hit_landed(target: Node3D, downed_target: Node3D) -> void:
+	_combo_landed += 1
+	if target == downed_target:
+		_accidental_downed_landed += 1
