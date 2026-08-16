@@ -239,6 +239,15 @@ func _finish_robber_with_player(player: Node3D, robber: Robber) -> bool:
 	health.take_hit(health.max_hp)
 	for _frame: int in range(WAIT_FRAMES):
 		await get_tree().physics_frame
+	# 優先順位導入後は生存犯人・生存客がいる限りダウン対象へは切り替わらない。
+	# このテストは追い打ち経路そのものを検証するため、検出中の他候補を範囲外へ退避する。
+	var isolation_offset := Vector3.RIGHT * (
+		detector.lock_on_release_range + detector.finish_lock_range)
+	for other_body: Node3D in detector.get_overlapping_bodies():
+		if other_body != robber:
+			other_body.global_position = player.global_position + isolation_offset
+	for _frame: int in range(WAIT_FRAMES):
+		await get_tree().physics_frame
 	var camera := player.get_node_or_null(^"SpringArm3D/Camera3D") as Camera3D
 	var distance := player.global_position.distance_to(robber.global_position)
 	var overlapping: Array[Node3D] = detector.get_overlapping_bodies()

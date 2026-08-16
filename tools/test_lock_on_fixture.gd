@@ -3,6 +3,7 @@ extends Node
 ## test_lock_on.gd のシーン生成・入力・物理待機を担うフィクスチャ。
 
 const PLAYER_SCENE: PackedScene = preload("res://actors/player/player.tscn")
+const LOCK_TEST_ROBBER_SCENE: PackedScene = preload("res://actors/npc/robber.tscn")
 const CIVILIAN_SCENE: PackedScene = preload("res://actors/npc/civilian.tscn")
 const CIVILIAN_SCRIPT: Script = preload("res://actors/npc/civilian.gd")
 const ROBBER_LAYER: int = 1 << 2
@@ -68,6 +69,15 @@ func _spawn_civilian(position: Vector3) -> Node3D:
 	_actors.add_child(civilian)
 	civilian.set_physics_process(false)
 	return civilian
+
+
+func _spawn_lock_test_robber(position: Vector3) -> Node3D:
+	var robber := LOCK_TEST_ROBBER_SCENE.instantiate() as Node3D
+	robber.position = position
+	robber.set("fall_duration", 0.0)
+	_actors.add_child(robber)
+	robber.set_physics_process(false)
+	return robber
 
 
 func _add_ground() -> void:
@@ -137,6 +147,11 @@ func _camera_angle_deg(camera: Camera3D, target: Node3D) -> float:
 	var forward := -camera.global_transform.basis.z
 	var to_target := target.global_position + Vector3.UP * 0.8 - camera.global_position
 	return rad_to_deg(forward.angle_to(to_target))
+
+
+func _marker_color(detector: LockOn) -> Color:
+	var material := detector.get("_marker_material") as StandardMaterial3D
+	return material.albedo_color if material != null else Color.TRANSPARENT
 
 
 func _assert(label: String, condition: bool) -> void:

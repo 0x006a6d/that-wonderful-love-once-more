@@ -5,6 +5,7 @@ extends "res://tools/test_lock_on_fixture.gd"
 
 const ROBBER_SCENE: PackedScene = preload("res://actors/npc/robber.tscn")
 const CLOSE_TARGET_POSITION: Vector3 = Vector3(0.0, 0.05, -0.5)
+const ACCIDENT_LIVE_POSITION: Vector3 = Vector3(0.55, 0.05, -0.7)
 const FAR_RANGE_MARGIN: float = 1.0
 const COMBO_WAIT_FRAMES: int = 240
 const INPUT_QUEUE_FRAMES: int = 5
@@ -19,6 +20,7 @@ func _ready() -> void:
 
 func _run() -> void:
 	print("=== ダウン追い打ち 検証開始 ===")
+	await _test_accidental_finish_regression()
 	await _test_finish_gates_and_double_record()
 	await _test_finish_range()
 	await _test_combo_auto_release()
@@ -26,6 +28,54 @@ func _run() -> void:
 	await _test_no_finish_keeps_nonlethal()
 	await _clear_world()
 	_finish()
+
+
+func _test_accidental_finish_regression() -> void:
+	await _new_world()
+	_combo_landed = 0
+	var player := _spawn_test_player()
+	# 実機事故と同じく、遺体を正面至近、生存犯人を近接が届くやや横へ置く。
+	player.set("lunge_speeds", Vector3.ZERO)
+	var downed_robber := _spawn_robber(CLOSE_TARGET_POSITION)
+	var live_robber := _spawn_robber(ACCIDENT_LIVE_POSITION)
+	await _wait_frames(SETTLE_FRAMES)
+	var downed_health := downed_robber.get_node(^"Health") as Health
+	var live_health := live_robber.get_node(^"Health") as Health
+	downed_health.take_hit(downed_health.max_hp)
+	await _wait_frames(2)
+	var camera := player.get_node(^"SpringArm3D/Camera3D") as Camera3D
+	var downed_angle := _camera_angle_deg(camera, downed_robber)
+	var live_angle := _camera_angle_deg(camera, live_robber)
+	var downed_distance := player.global_position.distance_to(downed_robber.global_position)
+	var live_distance := player.global_position.distance_to(live_robber.global_position)
+	print(("[accident candidates] downed angle=%.3f deg distance=%.3f m / " \
+		+ "live angle=%.3f deg distance=%.3f m") %
+		[downed_angle, downed_distance, live_angle, live_distance])
+	# 初段で生存側が倒れ、残り段が正面の遺体にも重なる事故条件を作る。
+	live_health.take_hit(live_health.max_hp - 1.0)
+	await _toggle_lock_on()
+	var detector := _lock_on(player)
+	var selected_live: bool = detector.current_target() == live_robber
+	var killed_by_player_before := RunState.robbers_killed_by_player
+	var hitbox := player.get_node(^"Model/MeleeHitbox") as Hitbox
+	var melee := player.get_node(^"PlayerMelee")
+	hitbox.hit_landed.connect(func(_target: Node3D) -> void: _combo_landed += 1)
+	melee.call("attack")
+	await _wait_frames(INPUT_QUEUE_FRAMES)
+	melee.call("attack")
+	await _wait_frames(INPUT_QUEUE_FRAMES)
+	melee.call("attack")
+	for _frame: int in range(COMBO_WAIT_FRAMES):
+		await get_tree().physics_frame
+		if str(melee.get("_state")) == "locomotion" and live_health.is_downed():
+			break
+	print("[accident combo] selected_live=%s landed=%d killed_by_player=%d -> %d" %
+		[str(selected_live), _combo_landed, killed_by_player_before,
+		RunState.robbers_killed_by_player])
+	_assert("正面至近の遺体がいても生存犯人へロックしコンボで追い打ち事故を起こさない",
+		downed_angle < live_angle and downed_distance < live_distance
+		and selected_live and live_health.is_downed() and _combo_landed >= 3
+		and RunState.robbers_killed_by_player == killed_by_player_before)
 
 
 func _test_finish_gates_and_double_record() -> void:
@@ -167,10 +217,10 @@ func _spawn_test_player() -> Node3D:
 	return player
 
 
-func _spawn_robber(position: Vector3) -> Robber:
-	var robber := ROBBER_SCENE.instantiate() as Robber
+func _spawn_robber(position: Vector3) -> Node3D:
+	var robber := ROBBER_SCENE.instantiate() as Node3D
 	robber.position = position
-	robber.fall_duration = 0.0
+	robber.set("fall_duration", 0.0)
 	_actors.add_child(robber)
 	robber.set_physics_process(false)
 	return robber

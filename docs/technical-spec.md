@@ -309,19 +309,32 @@ Player (CharacterBody3D)
 
 ### 6.1.1 ロックオン
 
-`actors/player/lock_on.gd` を `LockOnDetector`（`Area3D`）へ付ける。layer=0 / mask=3（`robber`）+4（`civilian`）とし、球形範囲に入った犯人・客の両方を候補にする。候補は (1) `Health` を持ちダウンしていない、(2) カメラ前方との角度が許容範囲内、(3) world レイヤーへのレイが遮られていない、の順で絞る。残った候補からカメラ前方との角度が最小の本体を選び、同角なら近い本体を優先する。
+`actors/player/lock_on.gd` を `LockOnDetector`（`Area3D`）へ付ける。layer=0 / mask=3（`robber`）+4（`civilian`）とし、球形範囲に入った犯人・客の両方を候補にする。候補は (1) `Health` を持つ、(2) 生存対象は `lock_on_range` 以内、ダウン対象は `robber` グループかつ `finish_lock_range` 以内で `can_receive_finish_hit()` が `true`、(3) カメラ前方との角度が許容範囲内、(4) world レイヤーへのレイが遮られていない、の順で絞る。
 
-`lock_on`（Tab / R3）は押下ごとのトグル。`target_acquired(target)` / `target_released()` を `player.gd` が購読し、攻撃判定とカメラへ対象を注入する。ロックオンのロジック自体は `player.gd` に置かない。
+残った候補は次の優先順位、カメラ前方との角度、距離の順で選ぶ。角度と距離を比較するのは同じ順位の中だけとする。順位の判定には具体型を直接参照せず、`robber` / `civilian` グループを使う。将来の警察など、どちらのグループにも属さない生存対象は脅威として順位1に置く。
+
+|順位|対象|
+|---:|---|
+|1|生存している犯人、および所属不明の生存対象|
+|2|生存している客|
+|3|`finish_lock_range` 以内のダウンした犯人（追い打ち）|
+
+この優先順位は、実機の乱戦で正面至近に倒れた犯人が角度だけで生存犯人より先に選ばれ、狙い直し後のコンボが意図しない追い打ちとして成立した事故への対策である。伏せた客が犯人付近にいる場合の誤ロックも同じ順位付けで防ぐ。これにより、追い打ちの関門2「倒れた犯人をもう一度ロックオンし直す」を、実際の意図の表明として機能させる。
+
+`lock_on`（Tab / R3）は押下ごとのトグル。`target_acquired(target)` / `target_released()` を `player.gd` が購読し、攻撃判定とカメラへ対象を注入する。ロックオンのロジック自体は `player.gd` に置かない。ロックオン中は候補の順位を再評価せず、上位候補が現れても自動では乗り換えない。乗り換えはプレイヤーが解除して押し直したときだけ行う。
 
 |`@export`|既定値|用途|
 |---|---:|---|
 |`lock_on_range`|12.0 m|候補検出球の半径|
+|`finish_lock_range`|2.0 m|ダウンした犯人を追い打ち候補に含める距離|
 |`lock_on_fov_deg`|100.0°|カメラ前方から候補までの許容角度|
 |`target_aim_height`|0.8 m|角度・遮蔽レイが狙う本体原点からの高さ|
 |`lock_on_release_range`|16.0 m|距離による解除閾値。検出距離より広くしてヒステリシスを持たせる|
 |`lose_target_grace`|0.6 s|連続遮蔽を許容する時間|
 |`show_placeholder_marker`|`true`|暫定3Dマーカーの表示|
-|`marker_color`|`#FFC729`|暫定3Dマーカーの色|
+|`marker_color`|`#FFC729`|生存犯人・所属不明の生存対象を示す暫定3Dマーカー色|
+|`marker_civilian_color`|`#FF29B8`|生存客を狙っていることを警告する暫定3Dマーカー色|
+|`marker_finish_color`|`#EB332E`|ダウン犯人への追い打ちを示す暫定3Dマーカー色|
 |`marker_size`|0.12 m|暫定3Dマーカー球の半径|
 |`marker_height`|2.1 m|暫定3Dマーカーの対象原点からの高さ|
 |`player_camera.gd: lock_follow_speed`|6.0|対象方向へヨーを補間する速度|
@@ -398,9 +411,9 @@ func _disable_hitbox() -> void:
 2. 対象のダウンで既存ロックを自動解除し、倒れた犯人をもう一度ロックオンし直させる
 3. 再ロック中に `finish_hits`（既定2）回当てた時だけ `Health.finished` を送る
 
-`LockOnDetector.finish_lock_range` は既定 `2.0 m`。ダウン済み候補はこの範囲内かつ、対象が
-`can_receive_finish_hit()` を公開して `true` を返す場合だけ選べる。具体的な役割型や陣営は
-参照しない。暫定マーカーは追い打ち対象だけ `marker_finish_color` に変え、プレイヤーが
+`LockOnDetector.finish_lock_range` は既定 `2.0 m`。ダウン済み候補はこの範囲内かつ `robber`
+グループで、対象が `can_receive_finish_hit()` を公開して `true` を返す場合だけ選べる。具体的な
+役割型は参照しない。暫定マーカーは追い打ち対象だけ `marker_finish_color` に変え、プレイヤーが
 意図している行為を明示する。
 
 `Hurtbox.receive_hit()` はダウン中、`Hitbox.exempt_body` が本体と一致する場合だけ

@@ -8,6 +8,15 @@ class_name LockOn
 const WORLD_MASK: int = 1 << 0
 const ROBBER_MASK: int = 1 << 2
 const CIVILIAN_MASK: int = 1 << 3
+const ROBBER_GROUP: StringName = &"robber"
+const CIVILIAN_GROUP: StringName = &"civilian"
+
+enum TargetPriority {
+	LIVE_THREAT,
+	LIVE_CIVILIAN,
+	DOWNED_ROBBER,
+	COUNT,
+}
 
 ## ロックオン候補を検出する距離（m）。
 @export var lock_on_range: float = 12.0
@@ -26,6 +35,8 @@ const CIVILIAN_MASK: int = 1 << 3
 ## 8/24 の HUD ロックオンマーカー実装で置き換える暫定 3D 表示。
 @export var show_placeholder_marker: bool = true
 @export var marker_color: Color = Color(1.0, 0.78, 0.16, 1.0)
+## 生存している客を狙っていることを警告する暫定マーカー色。
+@export var marker_civilian_color: Color = Color(1.0, 0.16, 0.72, 1.0)
 ## 追い打ち可能対象を明示する暫定マーカー色。
 @export var marker_finish_color: Color = Color(0.92, 0.20, 0.18, 1.0)
 ## 暫定マーカー球の半径（m）。
@@ -83,6 +94,7 @@ func _physics_process(delta: float) -> void:
 	_update_marker()
 	if _target == null:
 		return
+	# ロック中は候補を再評価しない。上位候補が現れても入力なしの乗り換えは行わない。
 	if not is_instance_valid(_target) or not _target.is_inside_tree():
 		# ツリーから消えた対象は追跡もシグナル購読も継続できないため解除する。
 		_release_target()
@@ -107,6 +119,7 @@ func _acquire_best_target() -> void:
 	var camera_forward := -_camera.global_transform.basis.z
 	camera_forward = camera_forward.normalized()
 	var best: Node3D = null
+	var best_priority: int = TargetPriority.COUNT
 	var best_angle: float = INF
 	var best_distance: float = INF
 	for body: Node3D in get_overlapping_bodies():
@@ -115,8 +128,9 @@ func _acquire_best_target() -> void:
 			continue
 		var distance := _candidate_origin().distance_to(body.global_position)
 		if health.is_downed():
-			# 陣営や具体型を参照せず、対象自身の公開問い合わせで追い打ち可否を決める。
-			if distance > finish_lock_range or not body.has_method("can_receive_finish_hit"):
+			# 追い打ちは robber グループかつ公開問い合わせで許可された対象だけに限定する。
+			if not body.is_in_group(ROBBER_GROUP) or distance > finish_lock_range \
+					or not body.has_method("can_receive_finish_hit"):
 				continue
 			if not bool(body.call("can_receive_finish_hit")):
 				continue
@@ -130,8 +144,12 @@ func _acquire_best_target() -> void:
 			continue
 		if _is_occluded(body):
 			continue
-		if angle < best_angle or (is_equal_approx(angle, best_angle) and distance < best_distance):
+		var priority := _target_priority(body, health)
+		if priority < best_priority \
+				or (priority == best_priority and (angle < best_angle \
+				or (is_equal_approx(angle, best_angle) and distance < best_distance))):
 			best = body
+			best_priority = priority
 			best_angle = angle
 			best_distance = distance
 	if best != null:
@@ -205,6 +223,17 @@ func _find_health(body: Node) -> Health:
 	return null
 
 
+func _target_priority(body: Node3D, health: Health) -> int:
+	if health.is_downed():
+		return TargetPriority.DOWNED_ROBBER
+	if body.is_in_group(ROBBER_GROUP):
+		return TargetPriority.LIVE_THREAT
+	if body.is_in_group(CIVILIAN_GROUP):
+		return TargetPriority.LIVE_CIVILIAN
+	# 将来追加される警察など所属不明の生存対象も、脅威として犯人と同じ最優先に扱う。
+	return TargetPriority.LIVE_THREAT
+
+
 func _apply_detector_range() -> void:
 	for child: Node in get_children():
 		var collision_shape := child as CollisionShape3D
@@ -245,6 +274,10 @@ func _update_marker() -> void:
 	_marker.visible = can_show
 	if can_show:
 		if _marker_material != null:
-			var finish_target: bool = _target_health != null and _target_health.is_downed()
-			_marker_material.albedo_color = marker_finish_color if finish_target else marker_color
+			if _target_health != null and _target_health.is_downed():
+				_marker_material.albedo_color = marker_finish_color
+			elif _target.is_in_group(CIVILIAN_GROUP):
+				_marker_material.albedo_color = marker_civilian_color
+			else:
+				_marker_material.albedo_color = marker_color
 		_marker.global_position = _target.global_position + Vector3.UP * marker_height
