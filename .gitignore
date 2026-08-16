@@ -16,6 +16,11 @@ assets/motions/mixamo_*.fbx
 # 許諾記録はローカル管理、公開しない
 docs/permissions.md
 
+# 日付入りの進行管理と個人的な作業メモはローカル管理。公開リポジトリに置く意味が無い
+docs/tasks.md
+docs/tasks-full.md
+はじめ方.md
+
 # OS
 Thumbs.db
 .DS_Store

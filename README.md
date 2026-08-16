@@ -10,6 +10,49 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 - 無料配布のみ（BOOTH / itch.io、価格0円）
 - 個人名義でのリリース
 
+## 操作
+
+|操作|キーボード|パッド|
+|---|---|---|
+|移動|W A S D|左スティック / 十字キー|
+|カメラ|← → , .|右スティック（横）|
+|パンチ|J|□|
+|キック|K|×|
+|回避|Space|R1|
+|ロックオン|Tab|R3（右スティック押し込み）|
+|踊る（回復）|E 長押し|○ 長押し|
+
+### コンボ
+
+パンチ（P）とキック（K）を押す順番でルートが分岐する。ルートに無い入力を押すと、その段で終わって待機に戻る。
+
+|入力|技の並び|
+|---|---|
+|`P P P`|左ジャブ → 右ストレート → 左フック|
+|`K K K`|右膝 → 右ミドル → 右ハイ|
+|`P K P P`|左ジャブ → 右膝 → 左ジャブ → 右ストレート|
+|`P K K P`|左ジャブ → 右膝 → 右ミドル → 左フック|
+|`P P K P K`|左ジャブ → 右ストレート → 右膝 → 左フック → 右ハイ|
+|`K P P P K P K`|右膝 → 左フック → 右ストレート → 左ジャブ → 右膝 → 左フック → 右ハイ|
+
+### 客への攻撃
+
+乱戦で客を巻き込む事故を防ぐため、客には3つの条件が掛かる。
+
+- 戦闘が始まると客は伏せ、通常の近接判定は届かない
+- 客に攻撃を通すには、その客をロックオンする必要がある
+- ロックオンしていても、ダウンさせるには2回叩く
+
+ロックオンの対象は、生存している犯人 → 生存している客 → ダウンした犯人（追い打ち）の順に選ばれる。マーカーの色で対象の種類が分かる。
+
+### 倒れた犯人への追い打ち
+
+倒した犯人にとどめを刺すと「過剰な力を用いた」記録が残り、エンディングが変わる。事故で成立しないよう、次の3つを満たす必要がある。
+
+- ダウンで自動的にロックオンが外れるため、倒れた相手をもう一度ロックオンし直す
+- ロックオンできるのは 2m 以内。遺体のそばに立つ必要がある
+- その状態で2回叩く
+
 ## 開発セットアップ
 
 一部のアセットはライセンス上リポジトリに含めていない（`assets/vrm/*.vrm` と `assets/motions/mixamo_*.fbx`）。クローン後に以下の手順で取得・配置してから Godot で開く。
@@ -22,7 +65,9 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 
    AIニケちゃん公式リポジトリの VRM を `assets/vrm/nikechan_player.vrm` としてダウンロードする（既にあればスキップ）。プロジェクトは主人公モデルをこの固定名で参照する。
 
-2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で `docs/asset-credits.md` の対応表にある各モーションを検索し、Hip Hop Dancing 以外は **FBX for Unity / Without Skin**、Hip Hop Dancing は **FBX for Unity / With Skin** でダウンロードする。対応表の `mixamo_*.fbx` 名にリネームして `assets/motions/` へ配置する（計 43 本）。ファイル名、検索名、専用 BoneMap の対応は同ドキュメントを参照。
+2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で検索してダウンロードし、`docs/asset-credits.md` の対応表のファイル名にリネームして `assets/motions/` へ配置する。
+
+   遊ぶだけなら **3本**（Walking / Running / Hip Hop Dancing）でよい。攻撃モーションは `actors/player/anim/*.res` にベイク済みでリポジトリに含まれているため、元の FBX は不要。`.res` を作り直す場合のみ、追加で6本が要る。検索名・ダウンロード設定・BoneMap の対応は同ドキュメントを参照。
 
 3. Godot 4.7.1 でプロジェクトを開く。初回起動時に FBX / VRM がインポートされる。
 
@@ -31,8 +76,7 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 - `CLAUDE.md` — 開発時の制約（IP・表現・コーディング規約）
 - `docs/game-design.md` — 世界観、物語構造、ゲームデザイン
 - `docs/technical-spec.md` — Godot 上の実装仕様
-- `docs/tasks.md` — コンテスト版（8/29 提出）の実装計画
-- `docs/tasks-full.md` — 提出後のフルスコープ版計画
+- `docs/asset-credits.md` — 使用しているモーション素材と取得元
 
 ## 使用アセット
 
