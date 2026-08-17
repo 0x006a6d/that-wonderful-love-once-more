@@ -4,7 +4,9 @@ class_name Civilian
 ## 客の共通挙動（technical-spec §8）。
 ## コンテスト版では BREACH を作らないため、FLEE_ROBBER は実装しない。
 ##
-## 見た目は Model 子ノード1個に隔離し、当面はプリミティブで表す。
+## 見た目は `Model` 子ノード1個に隔離する。差し替えは `model_scene` 1か所で完結する。
+## 伏せ・ダウンの姿勢はアニメーションが持ち（伏せ＝うつ伏せで静止、ダウン＝仰向けに
+## 倒れる）、Model を倒して表すのはプリミティブ表示のときだけ。
 ## 向きは犯人と同じく本体を回し、前方は Godot 標準の -Z。
 
 ## SHIELDED はリーダーが位置を制御する間の立ち姿と当たり判定を、通常の
@@ -51,6 +53,16 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 @export var targeted_hurtbox_height: float = 0.8
 
 @export_group("Appearance")
+## 被弾フラッシュの色・持続秒数・ピーク時の濃さ。誤爆に気づけるよう、客にも出す。
+@export var flash_color: Color = Color(1, 1, 1, 1)
+@export var flash_duration: float = 0.08
+@export_range(0.0, 1.0) var flash_tint_alpha: float = 0.85
+## 見た目。`Model` の下へ差し込むキャラクターのシーン（Mixamo の FBX）。
+## 差し替えはここ1か所で完結させる（technical-spec §9）。
+@export var model_scene: PackedScene
+## 主人公の VRM（MToon）へ寄せるため、写真テクスチャの陰影をトゥーンへ置き換える。
+## 切ると Mixamo 本来の見た目に戻る。
+@export var toon_skin: bool = true
 ## 各ステートを識別する色。
 @export var color_idle: Color = Color(0.24, 0.46, 0.72)
 @export var color_prone: Color = Color(0.22, 0.62, 0.48)
@@ -61,7 +73,7 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 
 @export_group("Nodes")
 @export var model_path: NodePath = ^"Model"
-@export var mesh_path: NodePath = ^"Model/Mesh"
+@export var animator_path: NodePath = ^"Animator"
 @export var health_path: NodePath = ^"Health"
 @export var hurtbox_path: NodePath = ^"Hurtbox"
 @export var hurtbox_shape_path: NodePath = ^"Hurtbox/CollisionShape3D"
@@ -73,8 +85,11 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 signal state_entered(state: int)
 
 var _model: Node3D = null
-var _mesh: MeshInstance3D = null
-var _material: StandardMaterial3D = null
+var _animator: NpcAnimator = null
+var _tint: ModelTint = ModelTint.new()
+## 現在のステート色。描画には使わないが、テストとデバッグのために保持する。
+var _state_color: Color = Color.WHITE
+var _flash_tween: Tween = null
 var _health: Health = null
 var _hurtbox: Area3D = null
 var _hurtbox_shape: CollisionShape3D = null
@@ -93,21 +108,21 @@ var _last_attacker: Node3D = null
 
 func _ready() -> void:
 	_model = get_node_or_null(model_path) as Node3D
-	_mesh = get_node_or_null(mesh_path) as MeshInstance3D
 	_health = get_node_or_null(health_path) as Health
 	_hurtbox = get_node_or_null(hurtbox_path) as Area3D
 	_hurtbox_shape = get_node_or_null(hurtbox_shape_path) as CollisionShape3D
 	_agent = get_node_or_null(agent_path) as NavigationAgent3D
 	_sm = get_node_or_null(state_machine_path) as StateMachine
 
-	if _mesh != null:
-		# 個体ごとに独立した色変化にするためマテリアルを複製する。
-		var base := _mesh.get_active_material(0)
-		if base is StandardMaterial3D:
-			_material = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
-		else:
-			_material = StandardMaterial3D.new()
-		_mesh.material_override = _material
+	if _model != null and model_scene != null:
+		_model.add_child(model_scene.instantiate())
+	if toon_skin:
+		ToonSkin.apply(_model)
+	_tint.setup(_model)
+	# Animator は Model を読むので、キャラクターを差し込んだ後に初期化させる。
+	_animator = get_node_or_null(animator_path) as NpcAnimator
+	if _animator != null:
+		_animator.setup()
 
 	if _health != null:
 		_health.staggered.connect(_on_staggered)
@@ -185,12 +200,16 @@ func exit_shielded() -> void:
 
 func _enter_idle() -> void:
 	_set_color(color_idle)
+	# 客に構えを取らせない。直立で静止させる。
+	_play(NpcAnimator.Clip.STAND)
 	_set_model_pose(idle_model_rotation_degrees, idle_model_height)
 	_apply_hurtbox_pose_for_state(CivilianState.IDLE)
 
 
 func _enter_prone() -> void:
 	_set_color(color_prone)
+	# うつ伏せで静止させる。仰向けに倒れるダウンと見分けが付く。
+	_play(NpcAnimator.Clip.PRONE)
 	_set_model_pose(prone_model_rotation_degrees, prone_model_height)
 	_apply_hurtbox_pose_for_state(CivilianState.PRONE)
 
@@ -254,6 +273,8 @@ func _physics_flee_player(_delta: float) -> void:
 	move_direction = move_direction.normalized()
 	velocity.x = move_direction.x * flee_speed
 	velocity.z = move_direction.z * flee_speed
+	if _animator != null and _animator.is_active():
+		_animator.drive_locomotion(Vector2(velocity.x, velocity.z).length())
 
 
 # --- SHIELDED -------------------------------------------------------------
@@ -261,6 +282,7 @@ func _physics_flee_player(_delta: float) -> void:
 func _enter_shielded() -> void:
 	_melee_targetable = false
 	_set_color(color_shielded)
+	_play(NpcAnimator.Clip.STAND)
 	# 盾の間は伏せず、IDLE と同じ立ち姿と Hurtbox を使う。
 	_set_model_pose(idle_model_rotation_degrees, idle_model_height)
 	_set_hurtbox_pose(standing_hurtbox_rotation_degrees, standing_hurtbox_height)
@@ -270,6 +292,8 @@ func _enter_shielded() -> void:
 
 func _enter_staggered() -> void:
 	_set_color(color_staggered)
+	# 連続被弾では頭から出し直す。
+	_play(NpcAnimator.Clip.HIT, true)
 
 
 func _physics_staggered(_delta: float) -> void:
@@ -282,6 +306,7 @@ func _physics_staggered(_delta: float) -> void:
 func _enter_downed() -> void:
 	_melee_targetable = false
 	_set_color(color_downed)
+	_play(NpcAnimator.Clip.DOWN, true)
 	_set_model_pose(downed_model_rotation_degrees, downed_model_height)
 	_set_hurtbox_pose(prone_hurtbox_rotation_degrees, prone_hurtbox_height)
 	# ダウンは Hitbox → Hurtbox → Health の信号処理中に確定するため、
@@ -369,12 +394,38 @@ func _flat_distance_to(position: Vector3) -> float:
 
 # --- 表示・姿勢ヘルパ ------------------------------------------------------
 
+## ステート色を記録する。描画には使わない。ステートは姿勢（立つ・伏せる・逃げる・
+## 倒れる）で伝わるため、色を重ねると犯人側の色と混ざって読めなくなる。
+## 見た目に出すのは被弾フラッシュだけ（flash_hit）。
 func _set_color(color: Color) -> void:
-	if _material != null:
-		_material.albedo_color = color
+	_state_color = color
 
 
+## Hurtbox から呼ばれる被弾フラッシュ。白を短く重ねる。
+func flash_hit() -> void:
+	if not _tint.is_ready():
+		return
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
+	_flash_tween = create_tween()
+	_flash_tween.tween_method(_apply_flash_mix, 1.0, 0.0, flash_duration)
+
+
+func _apply_flash_mix(amount: float) -> void:
+	if _tint.is_ready():
+		_tint.apply(flash_color, amount * flash_tint_alpha)
+
+
+func _play(clip: int, force: bool = false) -> void:
+	if _animator != null and _animator.is_active():
+		_animator.play(clip, -1.0, 1.0, force)
+
+
+## プリミティブ表示（カプセル）のときだけ Model を倒して姿勢を表す。
+## キャラクターモデルが入っている場合は、姿勢はアニメーションが持つ。
 func _set_model_pose(pose_rotation_degrees: Vector3, height: float) -> void:
+	if _animator != null and _animator.is_active():
+		return
 	if _model == null:
 		return
 	_model.rotation_degrees = pose_rotation_degrees

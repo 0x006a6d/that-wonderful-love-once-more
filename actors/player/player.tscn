@@ -53,7 +53,7 @@ shape = SubResource("Capsule_body")
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("7_health")
-max_hp = 100.0
+max_hp = 300.0
 stagger_threshold = 1
 
 [node name="Hurtbox" type="Area3D" parent="."]

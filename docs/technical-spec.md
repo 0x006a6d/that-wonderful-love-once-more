@@ -547,6 +547,30 @@ func take_finish_hit(attacker: Node3D = null) -> void
 HUDはこのシグナルを購読し、HPを毎フレーム参照しない。ダンス中の `heal()` も回復した物理フレーム
 ごとに通知するため、数値とバーが連続して増える。
 
+**入力表示**（`Screen/InputLog` / `ui/input_log.gd`）は画面下部中央に3行で出す。
+「コンボが成功しているのか分からない」への対処であり、チュートリアル用の一時的な表示ではなく
+常設する。
+
+1. 入力履歴 — 直近に押したボタン（J / K / 回避 / LOCK）を並べる。移動は数が多すぎるので出さない
+2. いま出た技 — `PlayerMelee.stage_started(technique, stage)` を購読し「2段目 右ストレート」
+3. その結果 — `Hitbox.hit_landed` で HIT（緑）、`Hitbox.hit_blocked` で「ガードされた」（橙）、
+   どちらも来ずにコンボが終われば MISS（灰）
+4. 次の派生 — `PlayerMelee.combo_node()` と `ComboTree.next_node()` から「J→左フック K→右膝」
+
+**空振りとガードは別物として出す。** 同じ MISS にまとめると、攻めが通っていないのか防がれて
+いるのかが読めず、回り込むという解答に辿り着けない。そのために `Hitbox` へ `hit_blocked`
+シグナルを足した（`blocks_hit_from()` が true を返した経路で送る）。
+
+入力は `Input.is_action_just_pressed()` のポーリングで読む。消費しないのでプレイヤー本体の
+`_unhandled_input()` と競合しない。逆に、テストや自動キャプチャから入力を流すときは
+`Input.action_press()` では本体に届かない（イベントを生成しないため）。`InputEventAction` を
+`Input.parse_input_event()` で流すこと。
+
+**相手のHPゲージ**（`Screen/EnemyPanel`）は画面上部中央に出す。対象はロックオン中の犯人、
+ロックオンしていなければ `enemy_gauge_range`（既定 14 m）以内で最も近い生存中の犯人。
+こちらは相手が入れ替わるので、シグナル購読ではなく毎フレーム `Health` を読む。表示名は本体の
+`display_name()` が名乗る（HUD 側でクラス分岐しない。役割を増やしても UI を触らずに済む）。
+
 致死判定は攻撃側が持ち、近接は `Hurtbox.receive_hit()` から `Health.take_hit(damage, lethal)`、銃撃は `Hurtbox.receive_shot()` から第3引数も含めて渡す。近接は `lethal = false`、銃撃は `lethal = true` とする。`Health` はダウン成立時に受け取った値を `downed(lethal)` でそのまま通知し、NPC本体が `RunState.record_down()` へ渡す。コンテスト版の犯人・客はラグドールを使わず、固定ポーズへ移行する。
 
 `stagger_threshold` は `docs/game-design.md` §6.2 の「段階の設置」にあたり、広い近接判定の誤爆で客がダウンするのを防ぐ下限である。近接は既定の `ignore_stagger_threshold = false` のまま下限を適用する。狙って撃つ銃撃は `true` を渡し、HPが0なら被弾回数にかかわらずダウンさせる。既定値は `false` のため、既存の `take_hit()` 呼び出しの挙動は変わらない。
@@ -634,11 +658,13 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 
 `actors/npc/civilian.gd` + `actors/npc/civilian.tscn`。IDLE / PRONE / FLEE_PLAYER / SHIELDED / STAGGERED / DOWNED の6ステートを実装済み。FLEE_ROBBER は上記理由により enum のみ。
 
-- **見た目はプリミティブ**（カプセル）。犯人と同様に見た目を `Model` 子ノード1個へ隔離し、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下に置く。`Model` 以下にロジックもコリジョンも置かない。最終モデルへの差し替えは8/24以降（`docs/game-design.md` §7.1）
+- **見た目は Mixamo キャラクター（With Skin）の Ch16**（水色の術衣・サージカルマスク）。犯人と同じ構造で、`CollisionShape3D` / `Hurtbox` / `Health` / ステートマシンは本体（`CharacterBody3D`）直下、`Model` 以下にはロジックもコリジョンもノードも置かない。差し替えは `model_scene` 1か所
+    - 立ち姿は歩行クリップの先頭フレームで静止させる。共有の待機クリップ（`mixamo_idle`）はボクシングの構えであり、人質には使えないため。専用の待機モーションを入れたら `clip_stand` を差し替える
+    - 色は犯人と同じく被弾フラッシュにしか使わない。立ち・伏せ・逃走・ダウンはすべて姿勢で判別できる
 - **幕への追従**は `GameDirector.act_changed` を購読する。PROLOGUE は IDLE、INFILTRATION 以降は PRONE。INFILTRATION 以降に生成した個体も `_ready()` から直接 PRONE へ入る
-- **伏せ姿勢**は `Model` と Hurtbox のカプセルを X 軸に90度回して下げる。各本体原点を基準とした実測で、通常の PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており、ロックオンしていない間は近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
+- **伏せ姿勢**はうつ伏せで静止するクリップ（`Dying` の最終フレーム）で表す。仰向けに倒れるダウンと見分けが付く。Hurtbox のカプセルは従来どおり X 軸に90度回して下げる。`Model` を倒すのはキャラクターが入っていない個体だけ。各本体原点を基準とした実測で、通常の PRONE の Hurtbox 上端は **0.650 m**、プレイヤーの `MeleeHitbox` 下端は **0.750 m**。0.100 m 離れており、ロックオンしていない間は近接判定の高さが重ならない。Hurtbox 自体は無効化しないため、将来の銃撃判定は通せる
 - **誤爆防止**は `Health.stagger_threshold = 2`。1回目は STAGGERED に留まり、2回目で DOWNED になる。1発の誤爆では倒れない段階性を維持しつつ、実機で195.6秒のプレイ中に客6人が全滅し、「ロックオン＋3回」が必要な逸脱ルートが現実的でなかったため1回分緩和した
-- **ダウン**は固定ポーズ。`Health.downed(lethal)` と本体が保持した最後の加害者を `RunState.record_down(self, Faction.CIVILIAN, lethal, attacker)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
+- **ダウン**は仰向けに倒れるクリップ（`Standing Death Backward 01`）を最後まで再生し、最終フレームで止める。`Health.downed(lethal)` と本体が保持した最後の加害者を `RunState.record_down(self, Faction.CIVILIAN, lethal, attacker)` へ渡し、以後の二重ヒットを防ぐため Hurtbox の `monitoring` / `monitorable` を `set_deferred()` で切る
 - **致死判定は攻撃側**が持つ方式で確定。近接の `Hitbox.lethal` は `false`、不安定型の `HitscanGun.lethal` は `true`。銃撃は `ignore_stagger_threshold = true` も渡し、客を1発でダウンさせる
 - **ロックオンを実装済み**。プレイヤーは PRONE を含む犯人・客の両方を対象にでき、客本人をロックオン中だけ `Hitbox.exempt_body` により近接が通る。`set_melee_targetable(enabled)` はロック中の PRONE Hurtbox の高さだけを `targeted_hurtbox_height = 0.8` へ上げ、解除時はその時点のステートに応じた高さへ戻す。DOWNED / SHIELDED 進入時にも対象化を破棄し、高さが取り残されないようにする。別の客と犯人側の近接は従来どおり `ignore_groups` と通常の伏せ高さで除外する
 - **リーダーからの保持API**として `enter_shielded(holder)` / `exit_shielded()` を公開する。客は `holder` の参照を保存せず、位置と向きはリーダー側が毎フレーム更新する。SHIELDED 中は IDLE と同じ立ち姿・Hurtbox を使い、幕が変わっても伏せない。解除時点の幕が PROLOGUE なら IDLE、それ以外なら PRONE へ戻る。軽い被弾では保持姿勢を維持し、ダウン時だけ DOWNED へ移る。識別色 `color_shielded = Color(0.82, 0.52, 0.18)` も `@export` とする
@@ -647,8 +673,10 @@ enum CivilianState { IDLE, PRONE, FLEE_ROBBER, FLEE_PLAYER, STAGGERED, DOWNED, S
 ## 9. 犯人（Robber）
 
 ```gdscript
-enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNED }
+enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, GUARD, DOWNED }
 ```
+
+役割固有のステート（`Leader.SHIELD` / `Gunner.COVER`）は `State.DOWNED + 1` として各役割スクリプトが定義する。**基底 enum へ足すときは DOWNED より前に挿す。** 末尾に足すと役割側の番号と衝突する（`GUARD` は STAGGERED と DOWNED の間に入れた）。
 
 共通の移動は `NavigationAgent3D`。役割ごとの差分は `roles/` 以下のスクリプトで注入する。
 
@@ -664,12 +692,52 @@ enum RobberState { PATROL, ALERT, CHASE, ATTACK, COVER, SHIELD, STAGGERED, DOWNE
 
 `actors/npc/robber.gd` + `actors/npc/robber.tscn`。PATROL / ALERT / CHASE / ATTACK / STAGGERED / DOWNED の6ステートを実装済み（`COVER` / `SHIELD` は役割スクリプトの担当）。
 
-- **見た目はプリミティブ**（カプセル）。導入済みの Mixamo 素材は Without Skin でメッシュを持たず、主人公VRMは公式アセットのため流用しない。状態はマテリアル色で示す（通常＝暗赤、警戒・追跡＝橙、攻撃の予備動作＝赤）
-    - **最終的な見た目は Mixamo キャラ（With Skin）へ差し替える。着手は 8/24 以降の演出フェーズ**（方針は `docs/game-design.md` §7.1）。8/18〜8/21 のマイルストーンはカプセルのまま進める
-    - 差し替えに備え、**見た目は `Model` 子ノード1個に隔離する**。`CollisionShape3D` / `Hurtbox` / `NavigationAgent3D` / ステートマシンは本体（`CharacterBody3D`）直下に置き、`Model` 以下にはロジックもコリジョンも置かない。差し替えは `Model` の中身の入れ替えと、色によるステート表示をアニメーション再生に置き換える作業だけになる
+- **見た目は Mixamo キャラクター（With Skin）**。差し替え済み（`docs/asset-credits.md`）。`CollisionShape3D` / `Hurtbox` / `NavigationAgent3D` / ステートマシンは本体（`CharacterBody3D`）直下に置き、`Model` 以下にはロジックもコリジョンもノードも置かない
+    - キャラクターは `@export var model_scene: PackedScene` を `_ready()` で `Model` の下へインスタンス化する。**差し替えはこのプロパティ1か所で完結する**。役割ごとの割り当ては継承先のシーン（`roles/*.tscn`）が上書きする。リーダー＝Ch08（白パーカー）、銃持ち＝Ch28（黒）、不安定型＝Ch01（白ポロ＋ジーンズ）
+    - Mixamo のキャラクターは +Z 向き。本体の前方は -Z なので、`Model` ノードを Y 軸に180度回して合わせる
     - 客（§8）も同じ構造にする
+- **色でステートを塗り分けない。** 役割・警戒・予備動作・ダウンをそれぞれ別の色で示すと、複数の色が同時に画面に出たとき何を意味しているのか読めなくなる（実機で確認）。役割は服装（シルエット）、警戒と予備動作はアニメーション（振り向き・追跡・攻撃の振りかぶり）で伝える
+    - カプセル時代の色（`color_idle` / `color_alert` / `color_telegraph`、役割スクリプトの `leader_color` ほか）と `_set_color()` は、現在ステートの記録としてだけ残っている。**描画には使わない**
+    - 見た目に出す色は**被弾フラッシュだけ**。`ModelTint`（`actors/shared/model_tint.gd`）が `Model` 以下の全 `MeshInstance3D` の `material_overlay` へ白を短く重ねる。濃さは `flash_tint_alpha`（既定 0.85）、平時はアルファ 0 で overlay 自体を外し、透明の描画パスも積まない
+    - 客も同じ仕組みで被弾フラッシュを出す。誤爆に気づけないと `docs/game-design.md` §6.2 の誤爆対策が成立しないため
+- **アニメーションは `NpcAnimator`**（`actors/npc/npc_animator.gd`）。`Model` の兄弟ノードとして本体直下に置き、`AnimationPlayer` を自分の子に持って `root_node` だけを `Model` 以下のキャラクタールートへ向ける（`Model` 以下にノードを足さないため）
+    - 子の `_ready()` は親より先に走り、その時点では `Model` が空なので、初期化は本体の `_ready()` から `setup()` を呼んで行う
+    - クリップは Mixamo モーション FBX を `@export`（`PackedScene`）で受け取り、`AnimationPlayer` から取り出した `Animation` を **static な辞書で共有**する。同じ FBX を NPC ごとにインスタンス化しない
+    - ロコモーション（待機／歩き／走り）は水平速度から毎フレーム選ぶ。単発クリップ（攻撃・のけぞり・ダウン）は各ステートの進入時に一度だけ再生する
+    - **静止ポーズ（客の立ち姿・伏せ姿）は「その1フレームだけを持つループクリップ」を作って再生する。** `AnimationPlayer` を `pause()` して止める方式は、クロスフェードの途中で固まって伏せと立ちの中間姿勢になる（リーダーが盾に取った客がしゃがんだまま動かない不具合として実機で発生した）
+    - **Hips の水平移動は `RootMotion.lock_horizontal()` で潰す**（`lock_root_motion`、既定 on）。位置は `CharacterBody3D` が持つため、クリップが体を運ぶと見た目と当たり判定がずれる。実測値は `docs/asset-credits.md`
 - **向きの規約**: 犯人は本体（`CharacterBody3D`）を回し、前方は Godot 標準の -Z。主人公は VRM の都合で `Model` ノードの +Z が前方であり、規約が異なる
-- **攻撃判定の窓はスクリプト側のタイマー**で開閉する（予備動作 `attack_telegraph` → 判定 `attack_active` → 硬直 `attack_recovery` → `attack_cooldown`）。§6.3 の Call Method Track 方式に揃えられないのは、犯人がまだリグとクリップを持たないため。リグ導入時に移行する
+- **攻撃判定の窓はスクリプト側のタイマー**で開閉する（予備動作 `attack_telegraph` → 判定 `attack_active` → 硬直 `attack_recovery` → `attack_cooldown`）。攻撃クリップはこの合計時間に合わせて速度スケールを掛けて再生し、当たる瞬間と絵をずらさない。§6.3 の Call Method Track 方式へ揃えるのは、犯人専用の攻撃クリップをベイクしてからにする
+### 攻防の成立（のけぞり耐性・ガード・反撃）
+
+素朴に「被弾のたびにのけぞる」実装だと、殴り始めた側が一方的に固め続けられて攻防が成立しない。
+`tools/measure_duel.gd`（1対1でコンボを回し続けるだけの計測ツール）の実測で、犯人は戦闘時間の
+**58% をのけぞりで潰され**、決着は **3.47 秒・4発**だった。以下の3つで組み替えてある。
+
+- **のけぞり耐性（poise）**: `Health.staggered` は被弾のたびに発火するだけの通知にとどめ、
+  のけぞるかどうかは受け手（`Robber._on_staggered()`）が決める。短時間の累計ダメージが
+  `poise`（既定 35）を超えたときだけ STAGGERED へ落とし、それ未満は耐える。`poise_recovery`
+  （毎秒 25）で回復するので、手を止めれば体勢が戻る。`Health` は信号にダメージ量を載せない
+  ため、HP の差分から取る
+  - プレイヤーの技は ジャブ 10 / ストレート 20 / フック 26。ジャブ単発では崩れず、
+    ストレート＋フックまで繋げば崩れる勘定
+- **ガード**: 耐えた直後に `guard_chance`（既定 0.7）で GUARD へ入る。正面 `guard_arc_deg`
+  （既定 140度）からの近接を `blocks_hit_from()` で完全に弾く。**弾いた攻撃はダメージも
+  ノックバックもヒットストップも発生しない**（`Hitbox._try_hit()` が `receive_hit` の前に
+  問い合わせる既存のフック）。回り込めば扇形の外から通る
+- **反撃**: ガードで `counter_after_blocks`（既定 2）回受け止めるか、`guard_duration`
+  （既定 1.1 秒）が切れた時点で、`counter_chance`（既定 0.8）で ATTACK へ移る。このときの
+  予備動作は `counter_telegraph`（0.18 秒）と短く、通常の 0.45 秒より割り込みにくい
+- `Leader.blocks_hit_from()` は `super` と OR で合成する。盾（SHIELD）と素のガード（GUARD）は
+  両立する
+
+最大HPはプレイヤー・犯人とも 300。上の3つを入れた後の実測は **決着 10.2 秒 / 手数 15 発 /
+のけぞり 17% / ガード 2.93 秒 3回 / 犯人の ATTACK 進入 6 回**。
+
+**テストに最大HPの数値を書かない。** バランス調整のたびにテストが落ちる。`max_hp` からの差で
+判定するか、テスト内で `max_hp` を小さく設定し直す（`tools/test_player_down.gd` の `TEST_MAX_HP`）。
+
+- **ダウンはクリップが倒れ込みを持つ**ため、本体の `rotation:x` は回さない。進入時に `_set_color(color_idle)` でステート色を戻す（予備動作の記録が残ったまま倒れないようにする）。`fall_angle_deg` / `fall_duration` による固定ポーズの倒し込みは、キャラクターが入っていない個体（テスト用ステージ）のフォールバックとしてだけ残っている
 - **知覚**は距離（`sight_range`）→ 視野角（`sight_fov_deg`、`close_notice_range` 以内は角度を問わない）→ 遮蔽（world レイヤーへのレイ）の3段。見失って `lose_sight_duration` 秒で PATROL へ戻る
 - **追跡**は `NavigationAgent3D`。ナビゲーションマップが未生成のときだけ直線移動にフォールバックする（ベイク前のステージでも動作確認できるようにするための保険）
 - 追跡速度（3.2 m/s）はプレイヤー（4.5 m/s）より遅い。逃げれば振り切れる

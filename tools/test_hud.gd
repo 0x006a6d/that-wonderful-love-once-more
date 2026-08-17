@@ -93,15 +93,19 @@ func _test_hp_display(player: Node3D, hud: CanvasLayer) -> void:
 	var health := player.get_node(^"Health") as Health
 	var hp_bar_path: NodePath = hud.get("hp_bar_path")
 	var bar := hud.get_node(hp_bar_path) as ProgressBar
+	# 期待値は max_hp から導く。バランス調整で最大HPが変わっても壊れないようにする。
+	var maximum: float = health.max_hp
 	health.take_hit(HIT_DAMAGE)
 	var hit_text := String(hud.call("hp_display_text"))
 	var hit_value := float(hud.call("hp_bar_value"))
 	var hit_pixels: float = bar.size.x * hit_value / bar.max_value
 	print("[HUD HP hit] text='%s' value=%.3f max=%.3f width=%.3f filled=%.3f" %
 		[hit_text, hit_value, bar.max_value, bar.size.x, hit_pixels])
+	var hit_expected: float = maximum - HIT_DAMAGE
 	_assert("(2a) 被弾後に HP 数値とバー長が追随する",
-		hit_text == "SELF HP   72 / 100" and is_equal_approx(hit_value, 72.0)
-		and is_equal_approx(hit_pixels, bar.size.x * 0.72))
+		hit_text == "SELF HP   %d / %d" % [roundi(hit_expected), roundi(maximum)]
+		and is_equal_approx(hit_value, hit_expected)
+		and is_equal_approx(hit_pixels, bar.size.x * hit_expected / maximum))
 
 	health.heal(HEAL_AMOUNT)
 	var heal_text := String(hud.call("hp_display_text"))
@@ -109,9 +113,12 @@ func _test_hp_display(player: Node3D, hud: CanvasLayer) -> void:
 	var heal_pixels: float = bar.size.x * heal_value / bar.max_value
 	print("[HUD HP heal] text='%s' value=%.3f max=%.3f width=%.3f filled=%.3f" %
 		[heal_text, heal_value, bar.max_value, bar.size.x, heal_pixels])
+	var heal_expected: float = minf(hit_expected + HEAL_AMOUNT, maximum)
 	_assert("(2b) 回復後に HP 数値とバー長が増える",
-		heal_text == "SELF HP   80 / 100" and is_equal_approx(heal_value, 80.0)
-		and heal_pixels > hit_pixels and is_equal_approx(heal_pixels, bar.size.x * 0.8))
+		heal_text == "SELF HP   %d / %d" % [roundi(heal_expected), roundi(maximum)]
+		and is_equal_approx(heal_value, heal_expected)
+		and heal_pixels > hit_pixels
+		and is_equal_approx(heal_pixels, bar.size.x * heal_expected / maximum))
 
 
 func _test_population(hud: CanvasLayer) -> void:

@@ -37,6 +37,9 @@ var _already_hit: Array[Node] = []
 
 ## この Hitbox が誰かに当たった瞬間に送る（攻撃側の手応え演出のトリガに使う）。
 signal hit_landed(target: Node3D)
+## 相手の方向防御（ガード・盾）に弾かれた瞬間に送る。命中とは区別する。
+## 空振りと「防がれた」を同じ扱いにすると、攻めが通っているのか分からなくなる。
+signal hit_blocked(target: Node3D)
 
 
 func _ready() -> void:
@@ -109,6 +112,7 @@ func _try_hit(area: Area3D) -> void:
 			_source_body.global_position if _source_body != null else global_position)
 		var blocked: bool = bool(target.call("blocks_hit_from", attacker_position))
 		if blocked:
+			hit_blocked.emit(target)
 			return
 	var landed: bool = hurtbox.receive_hit(self)
 	if not landed:

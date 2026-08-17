@@ -15,7 +15,7 @@ extends Node
 ##   (5) 復帰後は attack アクションが再び通る
 ##   (6) down ステートで非ループクリップが再生され、VRM ボーンが動く
 ##   (7) 倒れ込みが down_fall_time で終わる
-##   (8) 同じクリップの逆再生が stand_up_time で終わり、端点が逆順になる
+##   (8) 立ち上がりクリップが stand_up_time で終わり、倒れ姿勢から連続している
 ##
 ## 反撃はしない。プレイヤーはノックバックされた分だけ元の位置へ戻し、
 ## 殴られ続ける状況を維持する。
@@ -25,9 +25,12 @@ const MAX_FRAMES := 2600
 ## 入力が通ったかを見る観測窓（フレーム）。
 const INPUT_WINDOW := 20
 const DOWN_ANIMATION: StringName = &"player/down"
+const STAND_UP_ANIMATION: StringName = &"player/stand_up"
 const POSE_MIN_ANGLE_DEG: float = 1.0
 const ENDPOINT_TOLERANCE_DEG: float = 8.0
 const DURATION_TOLERANCE: float = 0.08
+## テスト中のプレイヤー最大HP。犯人の一撃 12 ダメージで手早くダウンさせる。
+const TEST_MAX_HP: float = 60.0
 
 var _pass: int = 0
 var _fail: int = 0
@@ -102,6 +105,11 @@ func _ready() -> void:
 	if _model == null or _health == null or _melee == null:
 		_fatal("Model / Health / PlayerMelee が見つからない")
 		return
+	# 検証したいのはダウン→復帰の挙動であって耐久力ではない。最大HPが上がると
+	# 削り切るまでに制限フレームを超えるので、テスト中だけ小さくする。
+	_health.max_hp = TEST_MAX_HP
+	_health.revive()
+
 	_skeleton = _find_skeleton(_model)
 	var animation_player: AnimationPlayer = _find_animation_player(_model)
 	var tree: AnimationTree = _melee.get_node_or_null(^"AnimationTree") as AnimationTree
@@ -240,7 +248,7 @@ func _evaluate() -> void:
 	print("[fall] actual=%.3fs expected=%.3fs end_frame=%d" % [
 		fall_elapsed, _configured_fall, _fall_end_frame
 	])
-	print(("[stand_up] actual=%.3fs expected=%.3fs play_mode=BACKWARD pose_delta=%.3fdeg " \
+	print(("[stand_up] actual=%.3fs expected=%.3fs pose_delta=%.3fdeg " \
 			+ "fallen_endpoint_error=%.3fdeg standing_endpoint_error=%.3fdeg") % [
 		stand_elapsed, _configured_stand, _stand_max_angle_deg,
 		fallen_to_stand_start_deg, standing_end_to_start_deg
@@ -263,12 +271,14 @@ func _evaluate() -> void:
 		_fall_max_angle_deg >= POSE_MIN_ANGLE_DEG)
 	_assert("倒れ込みが down_fall_time で終わる（±%.2f秒）" % DURATION_TOLERANCE,
 		fall_elapsed > 0.0 and absf(fall_elapsed - _configured_fall) <= DURATION_TOLERANCE)
-	_assert("立ち上がりが同じクリップの逆再生で stand_up_time に終わる",
+	_assert("立ち上がりが stand_up_time で終わる",
 		_stand_uses_backward_clip and _stand_max_angle_deg >= POSE_MIN_ANGLE_DEG
 		and stand_elapsed > 0.0
-		and absf(stand_elapsed - _configured_stand) <= DURATION_TOLERANCE
-		and fallen_to_stand_start_deg <= ENDPOINT_TOLERANCE_DEG
-		and standing_end_to_start_deg <= ENDPOINT_TOLERANCE_DEG)
+		and absf(stand_elapsed - _configured_stand) <= DURATION_TOLERANCE)
+	_assert("倒れ姿勢から立ち上がり開始姿勢へ飛びが無い（±%.0f度）" % ENDPOINT_TOLERANCE_DEG,
+		fallen_to_stand_start_deg <= ENDPOINT_TOLERANCE_DEG)
+	_assert("立ち上がり終了姿勢が立ち姿へ戻る（±%.0f度）" % ENDPOINT_TOLERANCE_DEG,
+		standing_end_to_start_deg <= ENDPOINT_TOLERANCE_DEG)
 
 	print("=== 結果: PASS=%d FAIL=%d ===" % [_pass, _fail])
 	print("ALL PASS" if _fail == 0 else "HAS FAILURE")
@@ -318,7 +328,13 @@ func _inspect_stand_up_node(tree: AnimationTree) -> bool:
 	if stand_tree == null:
 		return false
 	var clip: AnimationNodeAnimation = stand_tree.get_node(&"clip") as AnimationNodeAnimation
-	return clip != null and clip.animation == DOWN_ANIMATION \
+	if clip == null:
+		return false
+	# 専用の立ち上がりクリップ（Kip Up）を正再生するのが既定。素材が無い環境では
+	# 従来どおり down を逆再生する構成にフォールバックする。
+	if clip.animation == STAND_UP_ANIMATION:
+		return clip.play_mode == AnimationNodeAnimation.PLAY_MODE_FORWARD
+	return clip.animation == DOWN_ANIMATION \
 		and clip.play_mode == AnimationNodeAnimation.PLAY_MODE_BACKWARD
 
 

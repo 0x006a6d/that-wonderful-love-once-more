@@ -4,18 +4,21 @@ class_name Robber
 ## 犯人の共通挙動（technical-spec §9 / tasks.md 8/17）。
 ## 役割差（leader / gunner / erratic）は後日 `roles/` で注入する。ここは3体共通の骨格。
 ##
-## 見た目は当面プリミティブ。Mixamo素材は Without Skin でメッシュを持たず、
-## 主人公VRMは公式アセットのため流用しない（CLAUDE.md「使用できるアセット」）。
-## 状態はメッシュの色で示す（通常 / 警戒 / 攻撃の予備動作）。
+## 見た目は `Model` の下へ差し込む Mixamo キャラクター（With Skin）。差し替えは
+## `model_scene` 1か所で完結する。役割はシルエット（服装）で見分ける前提とし、
+## 色でステートを塗り分けない（重なると読めなくなる）。見た目に出す色は
+## 被弾フラッシュだけで、ModelTint が overlay に白を短く重ねる。
 ##
-## 攻撃判定の窓はこのスクリプトのタイマーで開閉する。主人公（§6.3）は
-## AnimationPlayer の Call Method Track を使うが、犯人はまだリグとクリップを
-## 持たないため。リグを入れた時点で Call Method Track 方式へ移す。
+## 攻撃判定の窓はこのスクリプトのタイマーで開閉し、クリップ長をそのタイマーに
+## 合わせて再生する（速度スケール）。主人公（§6.3）の Call Method Track 方式へ
+## 揃えるのは、犯人の攻撃クリップを専用にベイクしてからにする。
 ##
 ## 向きの規約: 犯人は本体（CharacterBody3D）を回し、前方は Godot 標準の -Z。
 ## 主人公は VRM の都合で Model ノードの +Z が前方であり、そちらとは規約が異なる。
 
-enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, DOWNED }
+## GUARD は DOWNED の手前に足す。役割スクリプトが `State.DOWNED + 1` を
+## 自分専用ステート（SHIELD / COVER）の番号として使っているため、末尾に足すと衝突する。
+enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, GUARD, DOWNED }
 
 ## 追跡対象を探すグループ名。プレイヤーが自分を登録している。
 @export var target_group: StringName = &"player"
@@ -69,6 +72,13 @@ enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, DOWNED }
 @export_group("Reaction")
 ## 被弾でよろけている秒数。
 @export var stagger_duration: float = 0.45
+## のけぞり耐性。1回の被弾ごとに必ずのけぞると、殴り始めた側が一方的に固め続けられ、
+## 攻防が成立しない（実測: 1対1で犯人がのけぞりに費やす時間が全体の 58%）。
+## 短時間に受けた累計ダメージがこの値を超えたときだけ STAGGERED へ落とす。
+## 0 以下にすると従来どおり毎回のけぞる。
+@export var poise: float = 35.0
+## のけぞり耐性の回復量（毎秒）。殴る手を止めれば体勢が立て直る。
+@export var poise_recovery: float = 25.0
 ## 足を止めるときの減速度（m/s²）。攻撃の予備動作・硬直・よろけで使う。
 @export var stop_decel: float = 20.0
 ## ノックバックの初速（m/s）。
@@ -82,16 +92,45 @@ enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, DOWNED }
 @export var fall_angle_deg: float = 85.0
 @export var fall_duration: float = 0.4
 
+@export_group("Guard")
+## ガードと反撃。殴られっぱなしだと格闘にならないので、耐えた直後に構えて、
+## 受け止めたら反撃する。回り込めば正面扇形の外から通る。
+@export var guard_enabled: bool = true
+## 近接を防ぐ正面扇形の全角（度）。これより外から殴られたガードは成立しない。
+@export var guard_arc_deg: float = 140.0
+## 構えている秒数。
+@export var guard_duration: float = 1.1
+## ガードを解いてから次に構えるまでの秒数。
+@export var guard_cooldown: float = 1.8
+## のけぞらずに耐えた被弾1回につき、構えに入る確率。
+@export_range(0.0, 1.0) var guard_chance: float = 0.7
+## この回数を受け止めたら、時間を待たずに反撃へ移る。
+@export var counter_after_blocks: int = 2
+## 受け止めたあとに反撃する確率。
+@export_range(0.0, 1.0) var counter_chance: float = 0.8
+## 反撃の予備動作（秒）。通常の attack_telegraph より短く、割り込みにくい。
+@export var counter_telegraph: float = 0.18
+## ガード中の向き直りの速さ。遅くして側面へ回り込む余地を残す。
+@export var guard_face_speed: float = 2.5
+
 @export_group("Appearance")
-## 通常時の色。
+## 見た目。`Model` の下へ差し込むキャラクターのシーン（Mixamo の FBX）。
+## 差し替えはここ1か所で完結させる（technical-spec §9）。
+@export var model_scene: PackedScene
+## 主人公の VRM（MToon）へ寄せるため、写真テクスチャの陰影をトゥーンへ置き換える。
+## 切ると Mixamo 本来の見た目に戻る。
+@export var toon_skin: bool = true
+## ステートの記録用の色。**描画には使わない**（_refresh_tint 参照）。
+## 役割スクリプトが `color_idle` を上書きして役割を識別する慣習も残している。
 @export var color_idle: Color = Color(0.42, 0.24, 0.26)
-## 警戒・追跡時の色。
 @export var color_alert: Color = Color(0.72, 0.52, 0.18)
-## 攻撃の予備動作中の色。
 @export var color_telegraph: Color = Color(0.85, 0.18, 0.16)
+## 被弾フラッシュのピーク時の濃さ。
+@export_range(0.0, 1.0) var flash_tint_alpha: float = 0.85
 
 @export_group("Nodes")
-@export var mesh_path: NodePath = ^"Mesh"
+@export var model_path: NodePath = ^"Model"
+@export var animator_path: NodePath = ^"Animator"
 @export var health_path: NodePath = ^"Health"
 @export var hurtbox_path: NodePath = ^"Hurtbox"
 @export var hitbox_path: NodePath = ^"MeleeHitbox"
@@ -102,8 +141,9 @@ enum State { PATROL, ALERT, CHASE, ATTACK, STAGGERED, DOWNED }
 ## 現在ステートが変わった（デバッグ表示・テスト用）。
 signal state_entered(state: int)
 
-var _mesh: MeshInstance3D = null
-var _material: StandardMaterial3D = null
+var _model: Node3D = null
+var _animator: NpcAnimator = null
+var _tint: ModelTint = ModelTint.new()
 var _health: Health = null
 var _hurtbox: Area3D = null
 var _hitbox: Hitbox = null
@@ -111,7 +151,7 @@ var _agent: NavigationAgent3D = null
 var _sm: StateMachine = null
 
 var _target: Node3D = null
-## 現在のステート色。被弾フラッシュの戻り先。
+## 現在のステート色。描画には使わず、テストとデバッグの識別に使う。
 var _state_color: Color = Color.WHITE
 var _flash_tween: Tween = null
 var _patrol_index: int = 0
@@ -123,12 +163,22 @@ var _engaged_notified: bool = false
 
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_timer: float = 0.0
+## 直近に蓄積した被弾ダメージ。poise を超えるとのけぞる。
+var _poise_damage: float = 0.0
+## ガードの再使用待ち（秒）。
+var _guard_cooldown_left: float = 0.0
+## 現在の構えで受け止めた回数。
+var _guard_blocks: int = 0
+## 次の ATTACK を反撃（短い予備動作）にする。
+var _counter_pending: bool = false
+## のけぞり判定に使う、前回の被弾時点の HP。
+var _hp_before_hit: float = 0.0
 ## Hurtbox から通知された、最後に自分へ攻撃を成立させた本体。
 var _last_attacker: Node3D = null
 
 
 func _ready() -> void:
-	_mesh = get_node_or_null(mesh_path) as MeshInstance3D
+	_model = get_node_or_null(model_path) as Node3D
 	_health = get_node_or_null(health_path) as Health
 	_hurtbox = get_node_or_null(hurtbox_path) as Area3D
 	_hitbox = get_node_or_null(hitbox_path) as Hitbox
@@ -136,18 +186,20 @@ func _ready() -> void:
 	_sm = get_node_or_null(state_machine_path) as StateMachine
 	RunState.robbers_total += 1
 
-	if _mesh != null:
-		# 個体ごとに独立した色変化にするためマテリアルを複製する。
-		var base := _mesh.get_active_material(0)
-		if base is StandardMaterial3D:
-			_material = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
-		else:
-			_material = StandardMaterial3D.new()
-		_mesh.material_override = _material
-		_state_color = color_idle
-		_material.albedo_color = _state_color
+	if _model != null and model_scene != null:
+		_model.add_child(model_scene.instantiate())
+	if toon_skin:
+		ToonSkin.apply(_model)
+	_tint.setup(_model)
+	_state_color = color_idle
+	_refresh_tint(0.0)
+	# Animator は Model を読むので、キャラクターを差し込んだ後に初期化させる。
+	_animator = get_node_or_null(animator_path) as NpcAnimator
+	if _animator != null:
+		_animator.setup()
 
 	if _health != null:
+		_hp_before_hit = _health.max_hp
 		_health.staggered.connect(_on_staggered)
 		_health.downed.connect(_on_downed)
 		_health.finished.connect(_on_finished)
@@ -160,6 +212,7 @@ func _ready() -> void:
 	_sm.add_state(State.CHASE, &"chase", _enter_chase, _physics_chase)
 	_sm.add_state(State.ATTACK, &"attack", _enter_attack, _physics_attack, _exit_attack)
 	_sm.add_state(State.STAGGERED, &"staggered", _enter_staggered, _physics_staggered)
+	_sm.add_state(State.GUARD, &"guard", _enter_guard, _physics_guard, _exit_guard)
 	_sm.add_state(State.DOWNED, &"downed", _enter_downed)
 	_sm.state_changed.connect(func(_from: int, to: int) -> void: state_entered.emit(to))
 	# ナビゲーションマップの初期化は次フレーム以降のため、1 フレーム待ってから開始する。
@@ -174,6 +227,10 @@ func _start_state_machine() -> void:
 func _physics_process(delta: float) -> void:
 	if _cooldown_left > 0.0:
 		_cooldown_left = maxf(_cooldown_left - delta, 0.0)
+	if _poise_damage > 0.0:
+		_poise_damage = maxf(_poise_damage - poise_recovery * delta, 0.0)
+	if _guard_cooldown_left > 0.0:
+		_guard_cooldown_left = maxf(_guard_cooldown_left - delta, 0.0)
 
 	if _sm != null:
 		_sm.physics_update(delta)
@@ -191,6 +248,27 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 	move_and_slide()
+	_update_locomotion_animation()
+
+
+## ロコモーションだけを毎フレーム更新する。攻撃・のけぞり・ダウンの単発クリップは
+## 各ステートの進入時に一度だけ再生する。
+func _update_locomotion_animation() -> void:
+	if _animator == null or not _animator.is_active() or _sm == null:
+		return
+	match _sm.current():
+		State.PATROL, State.ALERT, State.CHASE:
+			_animator.drive_locomotion(Vector2(velocity.x, velocity.z).length())
+		State.GUARD:
+			# 待機クリップはボクシングの構え。そのままガードの絵になる。
+			_animator.play(NpcAnimator.Clip.IDLE)
+
+
+## HUD のゲージに出す表示名。役割スクリプトが上書きする。
+## HUD がクラス名で分岐すると役割を増やすたびに UI を触ることになるため、
+## 名乗るのは本体側の責任にする。
+func display_name() -> String:
+	return "犯人"
 
 
 ## 現在のステート（テスト・デバッグ用）。
@@ -301,14 +379,28 @@ func _enter_attack() -> void:
 	_set_color(color_telegraph)
 	_hitbox_open = false
 	_stop_horizontal_immediate()
+	# クリップ長を予備動作＋判定＋硬直に合わせ、当たる瞬間と絵をずらさない。
+	if _animator != null and _animator.is_active():
+		var total: float = _current_telegraph() + attack_active + attack_recovery
+		var length: float = _animator.clip_length(NpcAnimator.Clip.ATTACK)
+		var scale: float = length / total if total > 0.0 and length > 0.0 else 1.0
+		_animator.play(NpcAnimator.Clip.ATTACK, 0.05, scale, true)
+
+
+## 反撃中は予備動作を短くする。ガードで受け止めた直後の一撃なので、
+## 通常の振りかぶりだと殴り返される前に潰される。
+func _current_telegraph() -> float:
+	return counter_telegraph if _counter_pending else attack_telegraph
 
 
 func _physics_attack(delta: float) -> void:
 	var t := _sm.time_in_state()
-	var active_end := attack_telegraph + attack_active
+	# export の attack_telegraph を隠さないよう別名にする（反撃では短くなる）。
+	var telegraph := _current_telegraph()
+	var active_end := telegraph + attack_active
 	var recovery_end := active_end + attack_recovery
 
-	if t < attack_telegraph:
+	if t < telegraph:
 		# 予備動作。向きだけ合わせて踏みとどまる。
 		_stop_horizontal(delta)
 		if _target != null:
@@ -338,6 +430,7 @@ func _physics_attack(delta: float) -> void:
 
 func _exit_attack() -> void:
 	_close_hitbox()
+	_counter_pending = false
 
 
 # --- STAGGERED ------------------------------------------------------------
@@ -345,6 +438,12 @@ func _exit_attack() -> void:
 func _enter_staggered() -> void:
 	_close_hitbox()
 	_set_color(color_alert)
+	if _animator != null and _animator.is_active():
+		# ノックバックを伴う被弾は大きくのけぞらせる。連続被弾では頭から出し直す。
+		var clip: int = NpcAnimator.Clip.HIT
+		if _knockback_timer > 0.0 and _animator.has_clip(NpcAnimator.Clip.KNOCKBACK):
+			clip = NpcAnimator.Clip.KNOCKBACK
+		_animator.play(clip, 0.05, 1.0, true)
 
 
 func _physics_staggered(delta: float) -> void:
@@ -356,11 +455,95 @@ func _physics_staggered(delta: float) -> void:
 		_sm.transition_to(State.CHASE)
 
 
+# --- GUARD ----------------------------------------------------------------
+
+## Hitbox の汎用方向防御フック。構えている間だけ、正面扇形からの近接を弾く。
+## 役割スクリプト（リーダーの盾）は override して super() と OR で合成する。
+func blocks_hit_from(attacker_position: Vector3) -> bool:
+	if _sm == null or _sm.current() != State.GUARD:
+		return false
+	if not _is_in_front_arc(attacker_position, guard_arc_deg):
+		return false
+	_guard_blocks += 1
+	# 受け止めた手応え。ダメージは通っていないので Hurtbox は呼ばれない。
+	flash_hit()
+	if _guard_blocks >= counter_after_blocks:
+		# 待たずに反撃へ。ガードで固まり続けると、今度は殴れないだけの置物になる。
+		_leave_guard_to_counter()
+	return true
+
+
+func _enter_guard() -> void:
+	_close_hitbox()
+	_guard_blocks = 0
+	_stop_horizontal_immediate()
+
+
+func _physics_guard(delta: float) -> void:
+	_stop_horizontal(delta)
+	if _target != null:
+		_face_position_at_speed(_target.global_position, delta, guard_face_speed)
+	if _sm.time_in_state() < guard_duration:
+		return
+	if _guard_blocks > 0:
+		_leave_guard_to_counter()
+		return
+	# 空振りのガード。追跡へ戻す。
+	_sm.transition_to(State.CHASE)
+
+
+func _exit_guard() -> void:
+	_guard_cooldown_left = guard_cooldown
+
+
+## 受け止めたあとの行き先を決める。反撃するか、追跡へ戻るか。
+func _leave_guard_to_counter() -> void:
+	if _sm == null or _sm.current() != State.GUARD:
+		return
+	if randf() < counter_chance and _target != null \
+			and _flat_distance_to(_target.global_position) <= attack_keep_range:
+		_counter_pending = true
+		_sm.transition_to(State.ATTACK)
+		return
+	_sm.transition_to(State.CHASE)
+
+
+## 被弾を耐えたときに構えるか決める。
+func _try_enter_guard() -> void:
+	if not guard_enabled or _sm == null or _guard_cooldown_left > 0.0:
+		return
+	match _sm.current():
+		State.ALERT, State.CHASE, State.ATTACK:
+			pass
+		_:
+			return
+	if _target == null or _flat_distance_to(_target.global_position) > attack_keep_range:
+		return
+	if randf() >= guard_chance:
+		return
+	_sm.transition_to(State.GUARD)
+
+
+## 正面 arc_deg（全角）の扇形に相手がいるか。
+func _is_in_front_arc(point: Vector3, arc_deg: float) -> bool:
+	var toward := point - global_position
+	toward.y = 0.0
+	if toward.length_squared() <= 0.0:
+		return false
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var half_arc := deg_to_rad(clampf(arc_deg, 0.0, 360.0) * 0.5)
+	return forward.dot(toward.normalized()) >= cos(half_arc)
+
+
 # --- DOWNED ---------------------------------------------------------------
 
 func _enter_downed() -> void:
 	_close_hitbox()
 	_stop_horizontal_immediate()
+	# 予備動作の色のまま倒れないよう、ステート色を通常へ戻す。
+	_set_color(color_idle)
 	# Hurtbox 自身が他の Area を監視する必要はないため monitoring は切る一方、
 	# プレイヤーの Hitbox 側から検出できるよう monitorable だけを残す。Health は
 	# ダウン中の通常 take_hit() を弾き、Hurtbox も再ロック済みの追い打ちだけを
@@ -377,7 +560,12 @@ func _enter_downed() -> void:
 		_hurtbox.set_deferred("monitorable", true)
 	# robber レイヤーは LockOnDetector が倒れた本体を狙い直すために残す。
 	set_collision_layer_value(3, true)
-	# 固定ポーズで倒す（ラグドールはコンテスト版では扱わない）。
+	if _animator != null and _animator.is_active():
+		# 倒れ込みはクリップが持つ。本体まで倒すと二重に倒れるので回さない。
+		_animator.play(NpcAnimator.Clip.DOWN, 0.1, 1.0, true)
+		return
+	# プリミティブ表示のままの個体は従来どおり固定ポーズで倒す
+	# （ラグドールはコンテスト版では扱わない）。
 	var tw := create_tween()
 	tw.tween_property(self, "rotation:x", deg_to_rad(fall_angle_deg), fall_duration) \
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -385,9 +573,24 @@ func _enter_downed() -> void:
 
 # --- Health からの通知 -----------------------------------------------------
 
+## Health からのよろけ通知。ここで「のけぞらせるか」を決める。
+## Health は被弾のたびに発火するだけで、耐えるかどうかは受け手の判断にする。
 func _on_staggered() -> void:
 	if _sm == null or _sm.current() == State.DOWNED:
 		return
+	# Health は信号にダメージ量を載せないので、HP の差分から取る。
+	var hp_now: float = _health.current_hp() if _health != null else 0.0
+	var taken: float = maxf(_hp_before_hit - hp_now, 0.0)
+	_hp_before_hit = hp_now
+
+	if poise > 0.0:
+		_poise_damage += taken
+		if _poise_damage < poise:
+			# 耐える。ノックバックと被弾フラッシュだけ出て、行動は中断されない。
+			# 耐えた直後は構えに入る余地を作る（殴られっぱなしにしない）。
+			_try_enter_guard()
+			return
+		_poise_damage = 0.0
 	# 連続被弾で滞在時間を延ばす（force=true で再進入）。
 	_sm.transition_to(State.STAGGERED, true)
 
@@ -437,17 +640,9 @@ func receive_knockback(direction: Vector3, strength: float) -> void:
 	_knockback_timer = knockback_decay
 
 
-## 被弾フラッシュ。白 → ステート色へ戻す。
-##
-## 戻り先を tween_property で固定しない理由が2つある。
-## 1. 生成時点の色を捕まえると、コンボの2発目以降が「フラッシュ途中の白っぽい色」を
-##    戻り先として記録し、殴るほど白へ寄って元の色に戻らなくなる
-## 2. 被弾の処理順は receive_knockback → flash_hit() → take_hit() であり、
-##    take_hit() が同じコールスタックで staggered → STAGGERED 進入 → _set_color()
-##    まで走る。生成時の戻り先を固定すると、直後に決まるステート色と食い違う
-## そのため毎フレーム `_state_color` を読んで混ぜる方式にする（t=0 で必ずステート色）。
+## 被弾フラッシュ。白を重ねて 0 へ抜く。
 func flash_hit() -> void:
-	if _material == null:
+	if not _tint.is_ready():
 		return
 	if _flash_tween != null and _flash_tween.is_valid():
 		_flash_tween.kill()
@@ -456,8 +651,17 @@ func flash_hit() -> void:
 
 
 func _apply_flash_mix(amount: float) -> void:
-	if _material != null:
-		_material.albedo_color = _state_color.lerp(flash_color, amount)
+	_refresh_tint(amount)
+
+
+## 被せ色を更新する。**被弾フラッシュのときだけ**白を重ねる。
+## ステートを色で塗り分けると、複数の色（役割・警戒・予備動作・ダウン）が
+## 重なって何を示しているのか読めなくなるため、色による状態表示はやめた。
+## 警戒と予備動作はアニメーション（振り向き・追跡・攻撃の振りかぶり）で伝える。
+func _refresh_tint(flash_amount: float) -> void:
+	if not _tint.is_ready():
+		return
+	_tint.apply(flash_color, flash_amount * flash_tint_alpha)
 
 
 # --- 内部ヘルパ -------------------------------------------------------------
@@ -619,14 +823,7 @@ func _close_hitbox() -> void:
 		_hitbox.deactivate_deferred()
 
 
-## ステート色を設定する。フラッシュ中はマテリアルへ直接書かない
-## （flash_hit の混ぜ込みが毎フレーム `_state_color` を読むため、そのまま
-## 新しいステート色へ収束する）。ここでフラッシュを打ち切ると、被弾と同時に
-## STAGGERED へ入る経路で白が1フレームも描画されない。
+## ステート色を記録する。描画には使わない（_refresh_tint 参照）。役割スクリプトと
+## テストが現在ステートの識別に読むため、値の管理だけ従来どおり残している。
 func _set_color(color: Color) -> void:
 	_state_color = color
-	if _material == null:
-		return
-	if _flash_tween != null and _flash_tween.is_valid():
-		return
-	_material.albedo_color = color

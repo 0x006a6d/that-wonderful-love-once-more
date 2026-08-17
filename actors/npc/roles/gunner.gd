@@ -55,6 +55,11 @@ func _ready() -> void:
 		_sm.add_state(COVER, &"cover", _enter_cover, _physics_cover, _exit_cover)
 
 
+## HUD のゲージに出す表示名。
+func display_name() -> String:
+	return "犯人 ─ 銃持ち"
+
+
 ## テスト・デバッグ表示用に現在選んでいる地点を返す。
 func selected_cover() -> Marker3D:
 	return _cover_target

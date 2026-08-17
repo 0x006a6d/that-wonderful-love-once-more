@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://ui/hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://ui/input_log.gd" id="2_inputlog"]
 
 [node name="Hud" type="CanvasLayer"]
 layer = 50
@@ -57,6 +58,88 @@ text = "犯人 残り 0 / 0  制圧 0 / 0"
 [node name="CivilianLabel" type="Label" parent="Screen/StatusPanel/Margin/Rows"]
 layout_mode = 2
 text = "客 生存     0 / 0"
+
+[node name="EnemyPanel" type="Panel" parent="Screen"]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -260.0
+offset_top = 24.0
+offset_right = 260.0
+offset_bottom = 96.0
+grow_horizontal = 2
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Screen/EnemyPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 10
+mouse_filter = 2
+
+[node name="Rows" type="VBoxContainer" parent="Screen/EnemyPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+mouse_filter = 2
+
+[node name="NameLabel" type="Label" parent="Screen/EnemyPanel/Margin/Rows"]
+layout_mode = 2
+text = "犯人"
+horizontal_alignment = 1
+
+[node name="HpBar" type="ProgressBar" parent="Screen/EnemyPanel/Margin/Rows"]
+custom_minimum_size = Vector2(488, 16)
+layout_mode = 2
+value = 100.0
+show_percentage = false
+
+[node name="InputLog" type="Control" parent="Screen"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -140.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("2_inputlog")
+
+[node name="Rows" type="VBoxContainer" parent="Screen/InputLog"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 4
+alignment = 2
+mouse_filter = 2
+
+[node name="HistoryLabel" type="Label" parent="Screen/InputLog/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+
+[node name="StageLabel" type="Label" parent="Screen/InputLog/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+
+[node name="NextLabel" type="Label" parent="Screen/InputLog/Rows"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
 
 [node name="LockMarker" type="Label" parent="Screen"]
 visible = false

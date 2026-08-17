@@ -1,20 +1,20 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://actors/npc/civilian.gd" id="1_civilian"]
 [ext_resource type="Script" path="res://actors/shared/health.gd" id="2_health"]
 [ext_resource type="Script" path="res://actors/shared/hurtbox.gd" id="3_hurtbox"]
 [ext_resource type="Script" path="res://actors/shared/state_machine.gd" id="4_sm"]
+[ext_resource type="Script" path="res://actors/npc/npc_animator.gd" id="5_animator"]
+[ext_resource type="PackedScene" path="res://assets/characters/mixamo_ch16.fbx" id="6_model"]
+[ext_resource type="PackedScene" path="res://assets/motions/mixamo_run.fbx" id="8_run"]
+[ext_resource type="PackedScene" path="res://assets/motions/mixamo_hit_head.fbx" id="9_hit"]
+[ext_resource type="PackedScene" path="res://assets/motions/mixamo_death_backward_01.fbx" id="10_down"]
+[ext_resource type="PackedScene" path="res://assets/motions/mixamo_dying.fbx" id="11_prone"]
+[ext_resource type="PackedScene" path="res://assets/motions/mixamo_walk_female.fbx" id="12_stand"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
 radius = 0.35
 height = 1.6
-
-[sub_resource type="CapsuleMesh" id="Mesh_capsule"]
-radius = 0.35
-height = 1.6
-
-[sub_resource type="StandardMaterial3D" id="Mat_civilian"]
-albedo_color = Color(0.24, 0.46, 0.72, 1)
 
 [sub_resource type="CapsuleShape3D" id="Capsule_hurt"]
 radius = 0.3
@@ -24,13 +24,19 @@ height = 1.6
 collision_layer = 8
 collision_mask = 1
 script = ExtResource("1_civilian")
+model_scene = ExtResource("6_model")
 
 [node name="Model" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0)
 
-[node name="Mesh" type="MeshInstance3D" parent="Model"]
-mesh = SubResource("Mesh_capsule")
-surface_material_override/0 = SubResource("Mat_civilian")
+[node name="Animator" type="Node" parent="."]
+script = ExtResource("5_animator")
+clip_walk = ExtResource("8_run")
+clip_run = ExtResource("8_run")
+clip_hit = ExtResource("9_hit")
+clip_down = ExtResource("10_down")
+clip_prone = ExtResource("11_prone")
+clip_stand = ExtResource("12_stand")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)

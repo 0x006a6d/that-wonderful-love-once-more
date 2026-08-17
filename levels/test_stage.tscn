@@ -1,9 +1,10 @@
-[gd_scene load_steps=15 format=3 uid="uid://cteststage0001"]
+[gd_scene load_steps=16 format=3 uid="uid://cteststage0001"]
 
 [ext_resource type="Script" path="res://levels/test_stage.gd" id="1_stage"]
 [ext_resource type="PackedScene" uid="uid://cplayr0nikeche01" path="res://actors/player/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://cdummy0nikeche01" path="res://actors/npc/dummy.tscn" id="3_dummy"]
 [ext_resource type="PackedScene" uid="uid://dkbj6jc7oqsmu" path="res://actors/npc/robber.tscn" id="4_robber"]
+[ext_resource type="PackedScene" path="res://ui/hud.tscn" id="5_hud"]
 
 [sub_resource type="Environment" id="Env_stage"]
 background_mode = 1
@@ -178,3 +179,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 5)
 [node name="Robber1" parent="." instance=ExtResource("4_robber")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0.2, -6)
 patrol_points = Array[NodePath]([NodePath("../PatrolA"), NodePath("../PatrolB")])
+
+[node name="Hud" parent="." instance=ExtResource("5_hud")]
+health_path = NodePath("../Player/Health")
+camera_path = NodePath("../Player/SpringArm3D/Camera3D")
+lock_on_path = NodePath("../Player/LockOnDetector")
+
+[node name="InputLog" parent="Hud/Screen" index="2"]
+melee_path = NodePath("../../../Player/PlayerMelee")
+hitbox_path = NodePath("../../../Player/Model/MeleeHitbox")

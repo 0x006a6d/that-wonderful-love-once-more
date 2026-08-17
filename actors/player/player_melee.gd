@@ -6,7 +6,8 @@ extends Node
 ## AnimationTree のステートマシンをコード側で組み立てる（.tscn への手書きは誤りやすい）。
 ## - locomotion: idle/walk/run の BlendSpace1D + TimeScale（速度同期）
 ## - dance: FBX から読むループクリップ。locomotion とだけ相互遷移する
-## - down/stand_up: 同じ非ループ FBX を正再生／逆再生し、所要時間へ速度同期する
+## - down/stand_up: それぞれ専用の非ループ FBX を正再生し、所要時間へ速度同期する
+##   （stand_up の素材が無い場合だけ、従来どおり down を逆再生して代用する）
 ## - melee_1..3: 生成済み .res（単発クリップ + Call Method Track 付き）
 ##
 ## 入力の流れ（1 押し 1 発）:
@@ -32,9 +33,10 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 ## 待機クリップ（Mixamo Idle）。
 @export_file("*.gltf", "*.fbx") var idle_scene: String = "res://assets/motions/mixamo_idle.fbx"
 @export var idle_key: String = "mixamo_com"
-## 歩行クリップ（Mixamo In Place。逸脱時は mixamo_walk_female / mixamo_walk_catwalk
-## に差し替え候補あり。パスとキーを変えるだけで試せる）。
-@export_file("*.gltf", "*.fbx") var walk_scene: String = "res://assets/motions/mixamo_walk.fbx"
+## 歩行クリップ。Medium Step Forward は In Place ではなく 0.93 m 前へ出るので、
+## ループの継ぎ目で戻らないよう `RootMotion.lock_horizontal()` で水平成分を潰す。
+## 差し替え候補は mixamo_walk / mixamo_walk_female / mixamo_walk_catwalk。
+@export_file("*.gltf", "*.fbx") var walk_scene: String = "res://assets/motions/mixamo_step_forward.fbx"
 @export var walk_key: String = "mixamo_com"
 ## 走行クリップ（Mixamo In Place）。
 @export_file("*.gltf", "*.fbx") var run_scene: String = "res://assets/motions/mixamo_run.fbx"
@@ -48,9 +50,12 @@ const ComboTree := preload("res://actors/player/combo_tree.gd")
 @export var dance_transition_xfade: float = 0.15
 
 @export_group("Down Clip")
-## ダウン素材。同じクリップを倒れ込みでは正再生、立ち上がりでは逆再生する。
+## ダウン素材。倒れ込みで正再生する。
 @export_file("*.gltf", "*.fbx") var down_scene: String = "res://assets/motions/mixamo_death_backward_01.fbx"
 @export var down_key: String = "mixamo_com"
+## 立ち上がり素材（Kip Up）。空にすると down を逆再生する従来の挙動へ戻る。
+@export_file("*.gltf", "*.fbx") var stand_up_scene: String = "res://assets/motions/mixamo_kip_up.fbx"
+@export var stand_up_key: String = "mixamo_com"
 
 @export_group("Locomotion Sync")
 ## locomotion ブレンドの基準速度（この速度で blend=1.0=走り）。
@@ -103,6 +108,10 @@ var _tree: AnimationTree = null
 var _state_machine: AnimationNodeStateMachinePlayback = null
 var _model: Node3D = null
 var _down_clip_length: float = 0.0
+## 立ち上がりクリップの長さ。専用素材が無いときは down と同じ値。
+var _stand_up_clip_length: float = 0.0
+## 専用の立ち上がりクリップを読めたか。読めなければ down の逆再生で代用する。
+var _has_stand_up_clip: bool = false
 
 var _state: String = "locomotion"
 var _combo_node: StringName = &""
@@ -296,6 +305,12 @@ func _projected_node() -> StringName:
 	return projected
 
 
+## 現在のコンボノード（`ComboTree.NODES` のキー）。コンボ中でなければ空。
+## HUD が「次に何が繋がるか」を引くために公開する。
+func combo_node() -> StringName:
+	return _combo_node
+
+
 func is_attacking() -> bool:
 	return _combo_node != &""
 
@@ -340,12 +355,13 @@ func start_down(fall_time: float) -> void:
 	down_animation_started.emit()
 
 
-## 倒れた姿勢から同じクリップを逆再生する。
+## 倒れた姿勢から立ち上がる。専用クリップがあれば正再生、無ければ down の逆再生。
 func start_stand_up(stand_time: float) -> void:
 	if _state_machine == null or _state != "down":
 		return
 	_state = "stand_up"
-	_tree.set("parameters/stand_up/speed/scale", _duration_scale(stand_time))
+	_tree.set("parameters/stand_up/speed/scale",
+		_scale_for(_stand_up_clip_length, stand_time))
 	_state_machine.travel("stand_up")
 	stand_up_animation_started.emit()
 
@@ -360,9 +376,13 @@ func finish_down() -> void:
 
 
 func _duration_scale(duration: float) -> float:
-	if duration <= 0.0 or _down_clip_length <= 0.0:
+	return _scale_for(_down_clip_length, duration)
+
+
+func _scale_for(clip_length: float, duration: float) -> float:
+	if duration <= 0.0 or clip_length <= 0.0:
 		return 1.0
-	return _down_clip_length / duration
+	return clip_length / duration
 
 
 func _finish_combo() -> void:
@@ -392,6 +412,7 @@ func _build_library() -> bool:
 	var walk := _extract(walk_scene, walk_key)
 	if walk != null:
 		walk.loop_mode = Animation.LOOP_LINEAR
+		RootMotion.lock_horizontal(walk)
 		lib.add_animation("walk", walk)
 	else:
 		push_warning("player_melee: walk (%s) load failed。idle で代用" % walk_key)
@@ -417,8 +438,26 @@ func _build_library() -> bool:
 		push_warning("player_melee: down (%s) load failed" % down_key)
 		return false
 	down.loop_mode = Animation.LOOP_NONE
+	RootMotion.lock_horizontal(down)
 	_down_clip_length = down.length
 	lib.add_animation("down", down)
+
+	# 立ち上がりは専用クリップを優先する。読めなければ down の逆再生で代用し、
+	# 素材が無い環境でも従来どおり動くようにする。
+	var stand_up: Animation = null
+	if not stand_up_scene.is_empty():
+		stand_up = _extract(stand_up_scene, stand_up_key)
+	_has_stand_up_clip = stand_up != null
+	if _has_stand_up_clip:
+		stand_up.loop_mode = Animation.LOOP_NONE
+		RootMotion.lock_horizontal(stand_up)
+		_stand_up_clip_length = stand_up.length
+		lib.add_animation("stand_up", stand_up)
+	else:
+		if not stand_up_scene.is_empty():
+			push_warning("player_melee: stand_up (%s) load failed。down の逆再生で代用"
+				% stand_up_key)
+		_stand_up_clip_length = _down_clip_length
 
 	var m1 := load(MELEE_1_RES) as Animation
 	var m2 := load(MELEE_2_RES) as Animation
@@ -510,8 +549,11 @@ func _build_tree() -> void:
 	var n_down := AnimationNodeAnimation.new()
 	n_down.animation = "player/down"
 	var n_stand_up := AnimationNodeAnimation.new()
-	n_stand_up.animation = "player/down"
-	n_stand_up.play_mode = AnimationNodeAnimation.PLAY_MODE_BACKWARD
+	if _has_stand_up_clip:
+		n_stand_up.animation = "player/stand_up"
+	else:
+		n_stand_up.animation = "player/down"
+		n_stand_up.play_mode = AnimationNodeAnimation.PLAY_MODE_BACKWARD
 
 	var down_tree := AnimationNodeBlendTree.new()
 	down_tree.add_node("clip", n_down, Vector2(0, 0))

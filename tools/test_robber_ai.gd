@@ -45,7 +45,7 @@ var _act_on_alert: int = -1
 var _min_distance: float = 1e9
 var _player_hp_min: float = 1e9
 var _player_pushed: float = 0.0
-## 被弾フラッシュがステート色からどれだけ離れたかの最大値。
+## 被弾フラッシュで重なった白の濃さ（overlay のアルファ）の最大値。
 var _flash_peak: float = 0.0
 
 var _patrol_start: Vector3 = Vector3.ZERO
@@ -206,17 +206,14 @@ func _phase_fight() -> void:
 		_melee.call("attack")
 
 
-## 被弾フラッシュが実際に描画されているかを見る。ステート色からどれだけ
-## 離れたかの最大値を取る。被弾と同時に STAGGERED へ入る経路でフラッシュが
-## 打ち切られると、この値がほぼ 0 になる。
+## 被弾フラッシュが実際に重なっているかを見る。被弾と同時に STAGGERED へ入る
+## 経路でフラッシュが打ち切られると、この値がほぼ 0 になる。ステートを色で塗り分けるのは
+## やめたので、平時の overlay はアルファ 0。フラッシュ中だけ白が濃くなる。
 func _sample_flash() -> void:
-	var material := _robber.get("_material") as StandardMaterial3D
-	if material == null:
+	var tint := _robber.get("_tint") as ModelTint
+	if tint == null or not tint.is_ready():
 		return
-	var state_color := _robber.get("_state_color") as Color
-	var c := material.albedo_color
-	var diff := Vector3(c.r - state_color.r, c.g - state_color.g, c.b - state_color.b).length()
-	_flash_peak = maxf(_flash_peak, diff)
+	_flash_peak = maxf(_flash_peak, tint.current_color().a)
 
 
 func _advance(phase: int) -> void:
@@ -243,7 +240,7 @@ func _evaluate() -> void:
 	_assert("犯人の攻撃でプレイヤーの HP が減った", _player_hp_min < _player_health.max_hp)
 	_assert("犯人の攻撃でプレイヤーがノックバックした", _player_pushed > 0.02)
 	_assert("殴り返すと犯人が STAGGERED に入った", _saw_staggered)
-	print("[result] 被弾フラッシュのピーク（ステート色からの距離）=%.3f" % _flash_peak)
+	print("[result] 被弾フラッシュのピーク（重なった白の濃さ）=%.3f" % _flash_peak)
 	_assert("被弾フラッシュが描画されている", _flash_peak > 0.15)
 	_assert("HP が尽きて DOWNED になった", _saw_downed and bool(_robber_health.is_downed()))
 	_assert("RunState に robber ダウンが記録された", RunState.robbers_downed >= 1)

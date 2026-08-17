@@ -13,6 +13,10 @@ class_name Hud
 @export var status_position: Vector2 = Vector2(24.0, 24.0)
 @export var status_size: Vector2 = Vector2(310.0, 174.0)
 @export var hp_bar_size: Vector2 = Vector2(274.0, 18.0)
+## 相手のHPゲージ。格闘の的として、いま殴っている相手の残りが常に見えるようにする。
+@export var enemy_bar_size: Vector2 = Vector2(488.0, 16.0)
+## ロックオンしていないとき、この距離以内で最も近い生存中の犯人をゲージに出す（m）。
+@export var enemy_gauge_range: float = 14.0
 @export var marker_size: Vector2 = Vector2(160.0, 38.0)
 @export var marker_world_height: float = 2.1
 
@@ -22,6 +26,7 @@ class_name Hud
 @export var accent_color: Color = Color("5A4C97")
 @export var hp_background_color: Color = Color(0.11, 0.12, 0.17, 0.95)
 @export var hp_fill_color: Color = Color(0.42, 0.85, 0.72, 1.0)
+@export var enemy_fill_color: Color = Color(0.92, 0.36, 0.32, 1.0)
 @export var live_robber_color: Color = Color(1.0, 0.78, 0.16, 1.0)
 @export var civilian_warning_color: Color = Color(1.0, 0.20, 0.32, 1.0)
 @export var downed_robber_color: Color = Color(0.72, 0.66, 0.95, 1.0)
@@ -38,6 +43,9 @@ class_name Hud
 @export var robber_label_path: NodePath = ^"Screen/StatusPanel/Margin/Rows/RobberLabel"
 @export var civilian_label_path: NodePath = ^"Screen/StatusPanel/Margin/Rows/CivilianLabel"
 @export var marker_path: NodePath = ^"Screen/LockMarker"
+@export var enemy_panel_path: NodePath = ^"Screen/EnemyPanel"
+@export var enemy_name_path: NodePath = ^"Screen/EnemyPanel/Margin/Rows/NameLabel"
+@export var enemy_bar_path: NodePath = ^"Screen/EnemyPanel/Margin/Rows/HpBar"
 @export_group("")
 
 var _health: Health = null
@@ -49,6 +57,12 @@ var _hp_bar: ProgressBar = null
 var _robber_label: Label = null
 var _civilian_label: Label = null
 var _marker: Label = null
+var _enemy_panel: Panel = null
+var _enemy_name: Label = null
+var _enemy_bar: ProgressBar = null
+## ゲージに出している相手。切り替わったときだけ購読し直す。
+var _enemy_body: Node3D = null
+var _enemy_health: Health = null
 var _last_robbers_downed: int = -1
 var _last_robbers_total: int = -1
 var _last_civilians_downed: int = -1
@@ -64,6 +78,9 @@ func _ready() -> void:
 	_robber_label = get_node_or_null(robber_label_path) as Label
 	_civilian_label = get_node_or_null(civilian_label_path) as Label
 	_marker = get_node_or_null(marker_path) as Label
+	_enemy_panel = get_node_or_null(enemy_panel_path) as Panel
+	_enemy_name = get_node_or_null(enemy_name_path) as Label
+	_enemy_bar = get_node_or_null(enemy_bar_path) as ProgressBar
 	_health = get_node_or_null(health_path) as Health
 	_camera = get_node_or_null(camera_path) as Camera3D
 	_lock_on = get_node_or_null(lock_on_path)
@@ -82,6 +99,7 @@ func _process(_delta: float) -> void:
 	_update_population(false)
 	# 3D対象は動くため、画面座標への射影は表示フレームごとに更新する。
 	_update_marker()
+	_update_enemy_gauge()
 
 
 func _connect_sources() -> void:
@@ -154,6 +172,61 @@ func _update_marker() -> void:
 	_marker.visible = true
 
 
+## 相手のHPゲージ。ロックオン中はその相手、していなければ手近な生存中の犯人。
+func _update_enemy_gauge() -> void:
+	if _enemy_panel == null:
+		return
+	var target: Node3D = _resolve_enemy_target()
+	if target != _enemy_body:
+		_bind_enemy(target)
+	if _enemy_health == null or _enemy_health.is_downed():
+		_enemy_panel.visible = false
+		return
+	_enemy_panel.visible = visible
+	if _enemy_bar != null:
+		_enemy_bar.max_value = maxf(_enemy_health.max_hp, 1.0)
+		_enemy_bar.value = clampf(_enemy_health.current_hp(), 0.0, _enemy_bar.max_value)
+
+
+func _resolve_enemy_target() -> Node3D:
+	if _lock_on != null and _lock_on.has_method("current_target"):
+		var locked := _lock_on.call("current_target") as Node3D
+		if locked != null and is_instance_valid(locked) \
+				and locked.is_in_group(&"robber"):
+			return locked
+	if _camera == null:
+		return null
+	var nearest: Node3D = null
+	var nearest_distance: float = enemy_gauge_range
+	for node in get_tree().get_nodes_in_group(&"robber"):
+		var body := node as Node3D
+		if body == null or not is_instance_valid(body):
+			continue
+		var health := _find_health(body)
+		if health == null or health.is_downed():
+			continue
+		var distance: float = _camera.global_position.distance_to(body.global_position)
+		if distance <= nearest_distance:
+			nearest_distance = distance
+			nearest = body
+	return nearest
+
+
+func _bind_enemy(target: Node3D) -> void:
+	_enemy_body = target
+	_enemy_health = _find_health(target) if target != null else null
+	if _enemy_name != null and target != null:
+		# 表示名は本体が名乗る（HUD 側でクラス分岐しない）。
+		_enemy_name.text = String(target.call("display_name")) \
+			if target.has_method("display_name") else String(target.name)
+
+
+func _find_health(body: Node3D) -> Health:
+	if body == null:
+		return null
+	return body.get_node_or_null(^"Health") as Health
+
+
 func _apply_marker_kind(kind: int) -> void:
 	_marker_kind = kind
 	match kind:
@@ -195,6 +268,23 @@ func _apply_visual_settings() -> void:
 			label.add_theme_font_size_override(&"font_size", status_font_size)
 	if _hp_label != null:
 		_hp_label.add_theme_font_size_override(&"font_size", hp_font_size)
+	if _enemy_panel != null:
+		var enemy_style := StyleBoxFlat.new()
+		enemy_style.bg_color = panel_color
+		enemy_style.border_color = accent_color
+		enemy_style.set_border_width_all(2)
+		_enemy_panel.add_theme_stylebox_override(&"panel", enemy_style)
+	if _enemy_name != null:
+		_enemy_name.add_theme_color_override(&"font_color", text_color)
+		_enemy_name.add_theme_font_size_override(&"font_size", status_font_size)
+	if _enemy_bar != null:
+		_enemy_bar.custom_minimum_size = enemy_bar_size
+		var enemy_background := StyleBoxFlat.new()
+		enemy_background.bg_color = hp_background_color
+		_enemy_bar.add_theme_stylebox_override(&"background", enemy_background)
+		var enemy_fill := StyleBoxFlat.new()
+		enemy_fill.bg_color = enemy_fill_color
+		_enemy_bar.add_theme_stylebox_override(&"fill", enemy_fill)
 	if _hp_bar != null:
 		_hp_bar.custom_minimum_size = hp_bar_size
 		var background_style := StyleBoxFlat.new()

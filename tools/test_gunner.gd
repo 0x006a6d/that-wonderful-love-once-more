@@ -12,6 +12,8 @@ const BLOCKED_POSITION: Vector3 = Vector3(3.0, 0.0, 0.0)
 const TOO_CLOSE_POSITION: Vector3 = Vector3(0.0, 0.0, -3.0)
 const WALL_POSITION: Vector3 = Vector3(1.5, 1.2, -4.0)
 const WALL_SIZE: Vector3 = Vector3(0.8, 3.0, 0.8)
+## 銃持ちの1発あたりのダメージ（gunner.tscn の HitscanGun.damage と同値）。
+const GUN_DAMAGE: float = 20.0
 const LONG_REEVALUATE: float = 10.0
 const STRAY_CIVILIAN_HEIGHT: float = 0.85
 
@@ -122,8 +124,10 @@ func _test_shooting_and_damage() -> void:
 		_shots.size() >= 2 and measured_interval >= gunner.shoot_interval
 		and measured_interval <= gunner.shoot_interval + frame_duration * 2.0
 		and health.current_hp() < health.max_hp)
+	# 1発分だけ削れていることを最大HPからの差で見る（最大HPの数値には依存させない）。
 	_assert("11. damage=20 の一発ではプレイヤーはダウンしない",
-		is_equal_approx(hp_after_one, 80.0) and not health.is_downed())
+		is_equal_approx(hp_after_one, health.max_hp - GUN_DAMAGE)
+		and not health.is_downed())
 
 
 func _test_robber_does_not_block_shot() -> void:
@@ -152,7 +156,8 @@ func _test_robber_does_not_block_shot() -> void:
 		and gun.ignore_groups.has(&"robber"))
 	_assert("6b. 仲間越しでも射線ありと判定し、背後のプレイヤーへ命中する",
 		clear_through_ally and hit_body == player
-		and is_equal_approx(player_health.current_hp(), 80.0))
+		and is_equal_approx(player_health.current_hp(),
+			player_health.max_hp - GUN_DAMAGE))
 
 
 func _test_reevaluation() -> void:
@@ -197,10 +202,14 @@ func _test_prologue_and_downed() -> void:
 	_add_cover(&"CoverAtGunner", Vector3.ZERO)
 	var prologue_gunner := _spawn_gunner(Vector3.ZERO)
 	await _wait_seconds(0.8)
-	var prologue_hp := (prologue_player.get_node("Health") as Health).current_hp()
-	print("[prologue] state=%d / shots=%d / HP=%.1f" %
-		[prologue_gunner.current_state(), _shots.size(), prologue_hp])
-	_assert("9. Act.PROLOGUE では撃たない", _shots.is_empty() and is_equal_approx(prologue_hp, 100.0))
+	# 期待値は「無傷であること」。最大HPの数値には依存させない。
+	var prologue_health := prologue_player.get_node("Health") as Health
+	var prologue_hp := prologue_health.current_hp()
+	print("[prologue] state=%d / shots=%d / HP=%.1f/%.1f" %
+		[prologue_gunner.current_state(), _shots.size(), prologue_hp,
+		prologue_health.max_hp])
+	_assert("9. Act.PROLOGUE では撃たない",
+		_shots.is_empty() and is_equal_approx(prologue_hp, prologue_health.max_hp))
 
 	await _new_world(GameTypes.Act.INFILTRATION)
 	var down_player := _spawn_player(PLAYER_POSITION)
@@ -210,12 +219,14 @@ func _test_prologue_and_downed() -> void:
 	await _wait_for_state(down_gunner, Gunner.COVER, STATE_TIMEOUT)
 	robber_health.take_hit(robber_health.max_hp)
 	await _wait_seconds(0.8)
-	var down_player_hp := (down_player.get_node("Health") as Health).current_hp()
-	print("[downed] state=%d / shots=%d / player HP=%.1f" %
-		[down_gunner.current_state(), _shots.size(), down_player_hp])
+	var down_player_health := down_player.get_node("Health") as Health
+	var down_player_hp := down_player_health.current_hp()
+	print("[downed] state=%d / shots=%d / player HP=%.1f/%.1f" %
+		[down_gunner.current_state(), _shots.size(), down_player_hp,
+		down_player_health.max_hp])
 	_assert("10. 犯人が DOWNED になったら以後撃たない",
 		down_gunner.current_state() == Robber.State.DOWNED and _shots.is_empty()
-		and is_equal_approx(down_player_hp, 100.0))
+		and is_equal_approx(down_player_hp, down_player_health.max_hp))
 
 
 func _test_civilian_stray_fire() -> void:

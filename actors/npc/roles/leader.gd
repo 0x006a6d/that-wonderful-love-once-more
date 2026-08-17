@@ -41,6 +41,11 @@ func _ready() -> void:
 		_sm.add_state(SHIELD, &"shield", _enter_shield, _physics_shield, _exit_shield)
 
 
+## HUD のゲージに出す表示名。
+func display_name() -> String:
+	return "犯人 ─ リーダー"
+
+
 func _physics_process(delta: float) -> void:
 	if _regrab_left > 0.0:
 		_regrab_left = maxf(_regrab_left - delta, 0.0)
@@ -56,8 +61,10 @@ func shielded_civilian() -> Civilian:
 	return _shielded_civilian
 
 
-## Hitbox の汎用方向防御フック。盾を持たない状態では常に false。
+## Hitbox の汎用方向防御フック。盾（SHIELD）と、基底のガード（GUARD）を合成する。
 func blocks_hit_from(attacker_position: Vector3) -> bool:
+	if super.blocks_hit_from(attacker_position):
+		return true
 	if current_state() != SHIELD or not _is_held_civilian_valid():
 		return false
 	var toward_attacker := attacker_position - global_position

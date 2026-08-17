@@ -22,7 +22,9 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 |ロックオン|Tab|R3（右スティック押し込み）|
 |踊る（回復）|E 長押し|○ 長押し|
 
-画面左上にHP、犯人の残り／制圧数、客の生存数を表示する。ロックオン中は対象の頭上に画面上マーカーが出て、生存犯人・客・ダウン犯人で警告表示が変わる。
+画面左上に自分のHP、犯人の残り／制圧数、客の生存数を表示する。上部中央には相手のHPゲージ（ロックオン中はその相手、していなければ手近な犯人）。ロックオン中は対象の頭上に画面上マーカーが出て、生存犯人・客・ダウン犯人で警告表示が変わる。
+
+画面下部には入力表示が3行で出る。押したキーの履歴、いま出た技（「2段目 右ストレート」）とその結果、そこから何に繋がるか（「つぎ：J→左フック K→右膝」）。結果は **HIT**（緑）／**ガードされた**（橙）／**MISS**（灰）を区別する。
 
 ### コンボ
 
@@ -36,6 +38,15 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 |`P K K P`|左ジャブ → 右膝 → 右ミドル → 左フック|
 |`P P K P K`|左ジャブ → 右ストレート → 右膝 → 左フック → 右ハイ|
 |`K P P P K P K`|右膝 → 左フック → 右ストレート → 左ジャブ → 右膝 → 左フック → 右ハイ|
+
+### 犯人のガードと反撃
+
+犯人は殴られっぱなしにならない。
+
+- **のけぞり耐性**: 一撃ごとには崩れない。短時間の累計ダメージが一定量を超えたときだけよろける。手を止めると体勢が戻る
+- **ガード**: よろけずに耐えた直後、構えて正面からの近接を弾く。弾かれた攻撃はダメージが入らない（入力表示に「ガードされた」と出る）
+- **回り込み**: ガードが効くのは正面の扇形だけ。側面・背面からは通る
+- **反撃**: 受け止められたあとは短い予備動作で殴り返してくる
 
 ### 客への攻撃
 
@@ -57,7 +68,7 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 
 ## 開発セットアップ
 
-一部のアセットはライセンス上リポジトリに含めていない（`assets/vrm/*.vrm` と `assets/motions/mixamo_*.fbx`）。クローン後に以下の手順で取得・配置してから Godot で開く。
+一部のアセットはライセンス上リポジトリに含めていない（`assets/vrm/*.vrm`、`assets/motions/mixamo_*.fbx`、`assets/characters/mixamo_*.fbx`）。クローン後に以下の手順で取得・配置してから Godot で開く。
 
 1. VRM を取得する。
 
@@ -69,9 +80,11 @@ This is an unofficial fan-made work of AI Nike-chan. Not affiliated with or endo
 
 2. Mixamo モーションを手動で取得する。Mixamo は自動ダウンロードできないため、[Mixamo](https://www.mixamo.com/) で検索してダウンロードし、`docs/asset-credits.md` の対応表のファイル名にリネームして `assets/motions/` へ配置する。
 
-   遊ぶだけなら **5本**（Walking / Running / Idle / Head Spinning / Standing Death Backward 01）でよい。攻撃モーションは `actors/player/anim/*.res` にベイク済みでリポジトリに含まれているため、元の FBX は不要。`.res` を作り直す場合のみ、追加で6本が要る。検索名・ダウンロード設定・BoneMap の対応は同ドキュメントを参照。
+   遊ぶだけなら **11本**。検索名と配置ファイル名は `docs/asset-credits.md` の「実行時に必要」の表がそのまま対応表になっている。攻撃モーションは `actors/player/anim/*.res` にベイク済みでリポジトリに含まれているため、元の FBX は不要。`.res` を作り直す場合のみ、追加で6本が要る。検索名・ダウンロード設定・BoneMap の対応は同ドキュメントを参照。
 
-3. Godot 4.7.1 でプロジェクトを開く。初回起動時に FBX / VRM がインポートされる。
+3. Mixamo キャラクターを手動で取得する。**With Skin** でダウンロードし、`assets/characters/mixamo_chNN.fbx` へリネームして配置する。犯人が Ch01 / Ch08 / Ch28、客が Ch16 の計4体。リターゲット設定（キャラクターごとに BoneMap が違う）は `docs/asset-credits.md` を参照。
+
+4. Godot 4.7.1 でプロジェクトを開く。初回起動時に FBX / VRM がインポートされる。
 
 ## ドキュメント
 

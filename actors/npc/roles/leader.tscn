@@ -1,8 +1,10 @@
 ; robber.tscn を継承し、共通構造を二重管理せず役割差のスクリプトだけを指定する。
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="PackedScene" path="res://actors/npc/robber.tscn" id="1_robber"]
 [ext_resource type="Script" path="res://actors/npc/roles/leader.gd" id="2_leader"]
+[ext_resource type="PackedScene" path="res://assets/characters/mixamo_ch08.fbx" id="9_model"]
 
 [node name="Leader" instance=ExtResource("1_robber")]
 script = ExtResource("2_leader")
+model_scene = ExtResource("9_model")

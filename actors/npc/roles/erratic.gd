@@ -41,6 +41,11 @@ func _ready() -> void:
 		push_warning("erratic: HitscanGun が無い")
 
 
+## HUD のゲージに出す表示名。
+func display_name() -> String:
+	return "犯人 ─ 不安定型"
+
+
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 	_update_civilian_shooting(delta)

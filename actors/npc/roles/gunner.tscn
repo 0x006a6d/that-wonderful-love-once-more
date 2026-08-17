@@ -2,14 +2,16 @@
 ; 不安定型は客の処刑用に一発ダウン（damage=100 / threshold無視）だが、銃持ちは
 ; プレイヤーとの撃ち合いを成立させるため damage=20 / threshold適用に弱める。
 ; この設定では流れ弾を受けた客は5発でダウンし civilians_killed に入る。これは意図した挙動。
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="PackedScene" path="res://actors/npc/robber.tscn" id="1_robber"]
 [ext_resource type="Script" path="res://actors/npc/roles/gunner.gd" id="2_gunner"]
+[ext_resource type="PackedScene" path="res://assets/characters/mixamo_ch28.fbx" id="9_model"]
 [ext_resource type="Script" path="res://actors/shared/hitscan_gun.gd" id="3_gun"]
 
 [node name="Gunner" instance=ExtResource("1_robber")]
 script = ExtResource("2_gunner")
+model_scene = ExtResource("9_model")
 
 [node name="MuzzlePoint" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, -0.3)

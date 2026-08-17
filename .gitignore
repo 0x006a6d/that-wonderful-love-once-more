@@ -12,6 +12,12 @@ export/
 assets/vrm/*.vrm
 # Mixamo (Adobe) 由来 FBX: 素材ファイル単体の再配布不可
 assets/motions/mixamo_*.fbx
+# キャラクター FBX と、インポータが同フォルダへ展開する埋め込みテクスチャ
+assets/characters/mixamo_*.fbx
+assets/characters/mixamo_*.png
+# Mixamo キャラを素材のまま並べた QC 画像。ゲーム画面ではないので公開しない
+docs/img/qc_*.png
+docs/img/qc_*.png.import
 
 # 許諾記録はローカル管理、公開しない
 docs/permissions.md
